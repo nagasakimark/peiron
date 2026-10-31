@@ -15,7 +15,7 @@
    pic types:
      {type:'one',  img:'apple'}                 one picture
      {type:'many', img:'apple', n:3}            the picture n times
-     {type:'can',  who:'p_she', img:'ski', ok:true}   person + activity + ⭕/✕
+     {type:'can',  img:'ski', ok:true}               activity + ⭕/✕ stamp
      {type:'prep', img:'cat', place:'box', prep:'in'} picture + box/desk
      {type:'ans',  img:'dog', yes:true}         topic + 🙆/🙅 kid
      {type:'week', img:'dog_walk', days:5}      picture + 7-day stamp card
@@ -29,19 +29,19 @@
   const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
 
   /* ---------- 1. can / can't  (NH5 Unit 3, 4) ---------- */
-  const WHO = [['I', 'p_i'], ['You', 'p_you'], ['He', 'p_he'], ['She', 'p_she']];
+  // Kept simple on purpose: always "I", one big picture, and a ⭕ or ✕ stamp.
   const CAN_ACTS = [
     ['swim', 'swim'], ['play the piano', 'piano'], ['play the recorder', 'recorder'],
     ['ride a bike', 'ride_bike'], ['ride a unicycle', 'unicycle'], ['cook', 'cook'],
     ['sing well', 'sing'], ['skate', 'skate'], ['ski', 'ski'], ['play soccer', 'soccer'],
-    ['play baseball', 'baseball'], ['play dodgeball', 'dodgeball'], ['run fast', 'run'],
+    ['play baseball', 'baseball'], ['run fast', 'run'],
     ['draw pictures', 'draw'], ['play the guitar', 'guitar'], ['jump rope', 'jumprope']];
   const can = [];
-  WHO.forEach(([w, wi]) => CAN_ACTS.forEach(([a, ai]) => [true, false].forEach(ok => {
-    can.push({ pre: w + ' ', post: ' ' + a + '.', correct: ok ? 'can' : "can't", wrong: ok ? "can't" : 'can',
-      say: `${w} ${ok ? 'can' : "can't"} ${a}.`, pic: { type: 'can', who: wi, img: ai, ok } });
-  })));
-  sets.push({ id: 'can', en: "can / can't", jp: 'できる？ できない？', unit: '5年 Unit 3・4', icon: 'unicycle', color: '#ff6b3d', items: can });
+  CAN_ACTS.forEach(([a, ai]) => [true, false].forEach(ok => {
+    can.push({ pre: 'I ', post: ' ' + a + '.', correct: ok ? 'can' : "can't", wrong: ok ? "can't" : 'can',
+      say: `I ${ok ? 'can' : "can't"} ${a}.`, pic: { type: 'can', img: ai, ok } });
+  }));
+  sets.push({ id: 'can', en: "can / can't", jp: 'できる？ できない？', unit: '5年 Unit 3', icon: 'cook', color: '#ff6b3d', items: can });
 
   /* ---------- 2. in / on / under / by  (NH5 Unit 5) ---------- */
   const THINGS = [['cat', 'cat'], ['dog', 'dog'], ['rabbit', 'rabbit'], ['bird', 'bird'], ['ball', 'ball'], ['apple', 'apple']];

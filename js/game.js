@@ -16,6 +16,7 @@
     ship: '🚢', shopping: '🛍️', sing: '🎤', skate: '⛸️', ski: '⛷️', sleepy: '😪', snowman: '⛄', soccer: '⚽', star: '⭐', sun: '☀️', sushi: '🍣', swim: '🏊',
     tent: '⛺', tv: '📺', umbrella: '☂️', unicycle: '🎪', videogame: '🎮', yen: '💴' };
   function stk(id, cls = '') {
+    if (id === 'peiron') return `<img class="stk ${cls}" src="img/icon.png" alt="" draggable="false">`;
     if (STICKERS.has(id)) return `<img class="stk ${cls}" src="img/stickers/${id}.webp" alt="" draggable="false">`;
     return `<div class="stk fallback ${cls}">${EMOJI[id] || '❓'}</div>`;
   }
@@ -52,7 +53,7 @@
       }
       case 'many': { const sz = p.n === 1 ? 150 : p.n === 2 ? 104 : p.n <= 4 ? 78 : 66;
         return `<div class="pic-many">${Array.from({ length: p.n }, () => stk(p.img).replace('class="stk', `style="width:${sz}px;height:${sz}px;font-size:${sz * 0.7}px" class="stk`)).join('')}</div>`; }
-      case 'can': return `<div class="pic-can"><div class="act">${stk(p.img)}</div><div class="who">${stk(p.who)}</div>${p.ok ? STAMP_OK : STAMP_NG}</div>`;
+      case 'can': return `<div class="pic-can"><div class="act">${stk(p.img)}</div>${p.ok ? STAMP_OK : STAMP_NG}</div>`;
       case 'prep': return `<div class="pic-prep">${prepSVG(p.img, p.place, p.prep)}</div>`;
       case 'ans': return `<div class="pic-ans"><div class="topic">${stk(p.img)}</div><div class="kid">${stk(p.yes ? 'p_yes' : 'p_no')}${p.yes ? STAMP_OK : STAMP_NG}</div></div>`;
       case 'week': return `<div class="pic-week">${stk(p.img)}<div class="week">${['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) =>
@@ -99,11 +100,15 @@
     { key: 'blue', color: '#2f6fe0', dark: '#1a3f88', kanji: '青', cpu: 'Oura' },
     { key: 'yellow', color: '#f2b71f', dark: '#9a6f05', kanji: '黄', cpu: 'Inasa' },
     { key: 'green', color: '#22a35a', dark: '#13643a', kanji: '緑', cpu: 'Tomachi' }];
-  const CPU = [{ int: 4.8, acc: 0.72 }, { int: 3.5, acc: 0.84 }, { int: 2.6, acc: 0.92 }];
-  const STEP = 30;
+  const CPU = [{ int: 5.6, acc: 0.72 }, { int: 4.4, acc: 0.82 }, { int: 3.3, acc: 0.9 }];
+  // Rowing model: every boat always rows at BASE speed. Right answers add a speed boost that fades away;
+  // 3 in a row adds a bigger BOOST. A wrong answer makes the crew stumble for a moment (they never stop).
+  const BASE = 5, KICK = 9, COMBO_KICK = 5, MAX_EXTRA = 20, FADE = 1.8;
+  function kick(r, combo) { r.extra = Math.min(MAX_EXTRA, r.extra + KICK + (combo ? COMBO_KICK : 0)); r.boost = combo ? 2.6 : 0; }
+  function stumble(r) { r.extra = 0; r.boost = 0; r.stumble = 1.3; }
 
   /* ---------- state ---------- */
-  const cfg = { set: null, len: 14, cpu: 1, color: store.get('color', 'red'), name: store.get('name', '') };
+  const cfg = { set: null, len: 1000, cpu: 1, color: store.get('color', 'red'), name: store.get('name', '') };
   let state = 'title', racers = [], player = null, trackLen = 0, turned = false;
   let q = null, locked = true, qCount = 0, answered = 0, correctN = 0, streak = 0, missed = [], raceT = 0, deck = null, endT = 0, countT = 0, lastCount = 4;
 
@@ -171,12 +176,12 @@
     const me = COLORS.find(c => c.key === cfg.color) || COLORS[0];
     const others = COLORS.filter(c => c !== me);
     const lanes = [others[0], me, others[1], others[2]];
-    racers = lanes.map((c, i) => ({ ...c, lane: i, x: Scene.LANES[i], z: 0, v: 0, credit: 0, phase: rnd() * 6, cyc: 0, boost: 0, streak: 0,
-      isPlayer: c === me, name: c === me ? (cfg.name || 'YOU') : c.cpu, aiT: 1.5 + rnd() * 1.5, finished: false, finishT: 0 }));
+    racers = lanes.map((c, i) => ({ ...c, lane: i, x: Scene.LANES[i], z: 0, v: 0, extra: 0, stumble: 0, phase: rnd() * 6, cyc: 0, boost: 0, streak: 0,
+      isPlayer: c === me, name: c === me ? (cfg.name || 'MY TEAM') : c.cpu, aiT: 1.5 + rnd() * 1.5, finished: false, finishT: 0 }));
     player = racers.find(r => r.isPlayer);
   }
   function idleRace() {
-    buildRacers(); trackLen = cfg.len * STEP;
+    buildRacers(); trackLen = cfg.len;
     Scene.setRace({ boats: racers, turnZ: trackLen / 2, finishZ: trackLen + Scene.BOAT_L });
   }
 
@@ -221,7 +226,7 @@
     $('qbot').textContent = q.bot || '';
     $('qarea').classList.toggle('three', !!(q.top || q.bot));
     const pre = q.top ? q.pre : highlightCue(q.pre, q.cue), post = q.top ? q.post : highlightCue(q.post, q.cue);
-    $('qline').innerHTML = `${pre}<span class="blank" id="blank"></span>${post}`;
+    $('qline').innerHTML = `<span class="qt">${pre}<span class="blank" id="blank"></span>${post}</span>`;
     const len = (q.pre + q.post).length + Math.max(q.correct.length, q.wrong.length);
     $('qline').className = len > 38 ? 'tiny' : len > 30 ? 'small' : '';
     const ch = shuffle([q.correct, q.wrong]); q._choices = ch;
@@ -239,21 +244,20 @@
     say(q.say);
     if (ok) {
       correctN++; streak++;
-      const boosted = streak >= 3; player.boost = boosted ? 2.6 : 0;
-      player.credit = Math.min(trackLen, player.credit + STEP * (boosted ? 1.5 : 1));
+      const boosted = streak >= 3; kick(player, boosted);
       sfx('correct', 0.55); sfx('taiko2', 0.9);
       Scene.splash(player, 14, 1.2, boosted);
       if (boosted) { sfx('boost', 0.6); Scene.shake(0.6); popup(streak === 3 ? 'BOOST!' : streak + ' COMBO!', 'gold'); }
       else popup(pick(['Nice!', 'Great!', 'Good!', 'Yes!', 'いいね！']));
     } else {
-      streak = 0; player.boost = 0; player.v *= 0.3; missed.push(q); deck.again(q, qCount);
+      streak = 0; stumble(player); missed.push(q); deck.again(q, qCount);
       sfx('wrong', 0.6); Scene.splash(player, 26, 0.6); popup('ざんねん…', 'bad');
     }
     updateCombo();
     setTimeout(() => {
       if (state !== 'race') return;
-      if (player.credit >= trackLen) { $('card').innerHTML = `<div class="pic-one">${stk('peiron')}</div>`; $('qtop').textContent = ''; $('qbot').textContent = ''; $('qarea').classList.remove('three');
-        $('qline').className = ''; $('qline').innerHTML = '<span style="font-family:var(--jp);font-weight:900">ゴールまで こげ！</span>';
+      if (player.finished) { $('card').innerHTML = `<div class="pic-one">${stk('peiron')}</div>`; $('qtop').textContent = ''; $('qbot').textContent = ''; $('qarea').classList.remove('three');
+        $('qline').className = ''; $('qline').innerHTML = '<span style="font-family:var(--jp);font-weight:900">ゴール！ おつかれさま！</span>';
         btns.forEach(b => { b.className = 'choice dim ' + (b.dataset.i === '0' ? 'c1' : 'c2'); b.querySelector('.t').textContent = ''; }); }
       else nextQ();
     }, ok ? 900 : 2000);
@@ -316,23 +320,22 @@
     const racing = state === 'race';
     if (racing) raceT += dt;
     for (const r of racers) {
-      if (racing && !r.isPlayer && r.credit < trackLen) {
+      if (racing && !r.isPlayer && !r.finished) {
         r.aiT -= dt;
         if (r.aiT <= 0) { const d = CPU[cfg.cpu];
-          if (rnd() < d.acc) { r.streak++; r.boost = r.streak >= 3 ? 2.6 : 0; r.credit = Math.min(trackLen, r.credit + STEP * (r.streak >= 3 ? 1.5 : 1)); }
-          else { r.streak = 0; r.boost = 0; }
-          const ahead = (r.credit - player.credit) / STEP;
-          r.aiT = d.int * (0.75 + rnd() * 0.55) * (ahead > 1.5 ? 1.3 : ahead < -2 ? 0.8 : 1); }
+          if (rnd() < d.acc) { r.streak++; kick(r, r.streak >= 3); } else { r.streak = 0; stumble(r); }
+          const ahead = r.z - player.z;   // keep the race close and exciting
+          r.aiT = d.int * (0.75 + rnd() * 0.55) * (ahead > 60 ? 1.35 : ahead < -60 ? 0.8 : 1); }
       }
-      r.boost = Math.max(0, r.boost - dt);
-      const gap = r.credit - r.z, max = r.boost > 0 ? 24 : 16;
-      let want = r.finished ? 6 : Math.min(max, Math.max(0, gap * 1.5));
+      r.boost = Math.max(0, r.boost - dt); r.stumble = Math.max(0, r.stumble - dt);
+      r.extra = Math.max(0, r.extra - FADE * dt);
+      let want = r.finished ? 5 : (BASE * (r.stumble > 0 ? 0.4 : 1) + r.extra);
       if (!racing && state !== 'results') want = 0;
-      r.v += (want - r.v) * Math.min(1, dt * 2.6); r.z += r.v * dt; if (!r.finished && r.z > r.credit) r.z = r.credit;
+      r.v += (want - r.v) * Math.min(1, dt * 2.4); r.z += r.v * dt;
       r.phase += dt * ((state === 'title' || state === 'setup' || state === 'countdown') ? 0.8 : 1.6 + r.v * 0.42);
       const cyc = Math.floor(r.phase / (Math.PI * 2));
       if (cyc !== r.cyc) { r.cyc = cyc; if (r.v > 1.5) { Scene.splash(r, 5); if (r.isPlayer) { sfx('taiko', 0.25 + Math.min(0.35, r.v / 50)); if (cyc % 4 === 0) sfx('gong', 0.12); } } }
-      if (racing && !r.finished && r.credit >= trackLen && r.z >= trackLen - 0.01) {
+      if (racing && !r.finished && r.z >= trackLen) {
         r.finished = true; r.finishT = raceT;
         if (r.isPlayer) { const pl = ranking().indexOf(r) + 1; banner(`GOAL!<small>${pl}い ゴール！</small>`); sfx('cheer', 0.7); sfx('gong', 0.8); say('Goal!'); endT = 2.6; }
       }
@@ -361,6 +364,11 @@
   Scene.init($('scene'));
   addEventListener('resize', fit);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => Scene.resize(Math.min(innerWidth / 1280, innerHeight / 600)));
+  // Only ask questions whose pictures have been drawn, so the picture always matches the sentence.
+  const picsOf = p => [p.img, p.who, p.type === 'ans' ? (p.yes ? 'p_yes' : 'p_no') : null].filter(Boolean);
+  QUESTION_SETS.forEach(s => { const ok = s.items.filter(it => picsOf(it.pic).every(id => STICKERS.has(id)));
+    if (ok.length >= 6) s.items = ok;
+    if (!STICKERS.has(s.icon)) { const f = s.items.find(it => STICKERS.has(it.pic.img)); if (f) s.icon = f.pic.img; } });
   // stamp days for the week pictures
   QUESTION_SETS.forEach(s => s.items.forEach((it, k) => { if (it.pic.type === 'week') it.pic.on = shuffle([0, 1, 2, 3, 4, 5, 6]).slice(0, it.pic.days).sort(); }));
   setMuted(muted); fit(); showTitle(); requestAnimationFrame(frame);

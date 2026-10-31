@@ -14,7 +14,7 @@ The 長崎ペーロン選手権大会 is held off **Matsugae pier (松が枝)** 
 ## Game sets
 | Set | Grammar | Textbook |
 |---|---|---|
-| can / can't | I / You / He / She can … | NH5 Unit 3・4 |
+| can / can't | I can / I can't, with one picture and a ⭕ or ✕ stamp | NH5 Unit 3 |
 | in / on / under / by | The cat is … the box. | NH5 Unit 5 |
 | Yes, I do / can / am | match the answer to the question | Let's Try 1・2, NH5 Unit 3 |
 | What? Where? When? | question words | all books |
@@ -24,10 +24,12 @@ The 長崎ペーロン選手権大会 is held off **Matsugae pier (松が枝)** 
 | Mix | everything | |
 
 ## How it plays
-- Each right answer moves your boat forward, and **3 right in a row = BOOST**.
+- Every boat rows all the time. A right answer gives a burst of speed that fades, and **3 right in a row = BOOST** (an even bigger burst).
+- A wrong answer makes the crew stumble and slow down for a moment, but the boat never stops.
+- Course lengths: みじかい about 1 minute, ふつう about 1½ minutes, ながい about 2 minutes.
 - After every answer, a native voice reads the full sentence.
 - A wrong answer comes back again 3 questions later, and the results screen lists every missed sentence with a 🔊 button.
-- Students can type their name onto their boat and pick its colour. Their best place for each set is saved on that computer.
+- Teams type their team name onto their boat and pick its colour. Their best place for each set is saved on that computer.
 - Settings: race length (みじかい・ふつう・ながい) and how strong the CPU boats are (やさしい・ふつう・つよい).
 - Keyboard: `1` / `2` or `←` / `→`.
 
@@ -45,7 +47,7 @@ python tools/gen_stickers.py         # draws missing pictures listed in tools/st
 node tools/finish_stickers.js        # SVG -> transparent WebP (npm i playwright sharp)
 python tools/build_assets.py         # updates js/assets.js
 ```
-A missing picture falls back to an emoji, and a missing voice falls back to the browser's speech, so the game always works.
+Questions whose picture hasn't been drawn yet are left out automatically, so the picture always matches the sentence. A missing voice falls back to the browser's speech.
 
 ## For the games hub (nagasakimark/games → games.js)
 ```

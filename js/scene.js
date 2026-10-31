@@ -267,18 +267,54 @@ const Scene = (() => {
     for (let j = 0; j < 3; j++) { const fx = x - 1 + j; seg(P(fx, 0.9, z), P(fx, 3.4, z), '#666', s * 0.04);
       const col = cols[(k + j) % cols.length]; poly([P(fx, 3.4, z), P(fx + 0.9, 3.3, z), P(fx + 0.9, 2.6, z), P(fx, 2.6, z)], col); }
   }
-  // Matsugae pier with the crowd; side = +1 (east bank on the right, leg 1) or -1 (left, leg 2)
-  function pier(side, z0, z1, withShip) {
-    const x0 = side * 15.5, x1 = side * 22;
+  // The east bank of the harbour: one continuous quay from the camera to the horizon (side +1 = right, -1 = left).
+  // segs: [[zFrom, zTo, quayX], ...]  — quayX is the distance of the quay wall from the course centre.
+  const Q = 16;
+  function shore(side, segs) {
+    const items = [], far = cam.z + 260;
+    // land + quay wall, drawn first (behind everything on the water)
+    items.push([1e9, () => {
+      for (const [za, zb, qx] of segs) {
+        const z0 = Math.max(za, cam.z + 1.2), z1 = Math.min(zb, far); if (z1 <= z0) continue;
+        const X = side * qx, XF = side * 400;
+        poly([P(X, 1.3, z0), P(X, 1.3, z1), P(XF, 1.3, z1), P(XF, 1.3, z0)], '#cbc3b2');
+        poly([P(X, 0, z0), P(X, 0, z1), P(X, 1.3, z1), P(X, 1.3, z0)], '#9e9688');
+        seg(P(X, 1.3, z0), P(X, 1.3, z1), '#e9e3d6', 2);
+      }
+      // end walls where the quay steps back (berths)
+      for (let i = 1; i < segs.length; i++) { const z = segs[i][0], qa = segs[i - 1][2], qb = segs[i][2];
+        if (z > cam.z + 1.2 && z < far) poly([P(side * qa, 0, z), P(side * qb, 0, z), P(side * qb, 1.3, z), P(side * qa, 1.3, z)], '#b3ab9c'); }
+    }]);
+    // warehouses, trees and shops along the quay
+    const start = Math.ceil((cam.z + 4) / 11) * 11;
+    for (let z = Math.min(far, segs[segs.length - 1][1]); z >= start; z -= 11) {
+      const sg = segs.find(g => z >= g[0] && z < g[1]); if (!sg) continue;
+      const k = Math.round(z / 11), qx = sg[2];
+      items.push([z, () => {
+        const x0 = side * (qx + 5 + hash(k, 3) * 4), x1 = x0 + side * 6, w = 4 + hash(k, 4) * 4, h = 3 + hash(k, 5) * 6;
+        if (hash(k, 6) < 0.3) { // trees
+          for (let j = 0; j < 3; j++) { const t = P(x0 + side * j * 1.4, 1.3 + 1.6, z + j * 1.8), tr = P(x0 + side * j * 1.4, 1.3, z + j * 1.8);
+            if (t) { seg(tr, t, '#7a5a3a', t.s * 0.25); dot(t, t.s * 1.2, j % 2 ? '#4f9a5a' : '#3f8a4c'); } }
+          return;
+        }
+        const col = ['#f2efe8', '#e3e8ec', '#f4e6d4', '#dfe9e1', '#e9dfe9'][k % 5], roof = ['#5d7486', '#8a5a44', '#4f6b5a', '#6d6d7a'][k % 4];
+        poly([P(x0, 1.3, z), P(x0, 1.3, z + w), P(x0, 1.3 + h, z + w), P(x0, 1.3 + h, z)], col, 'rgba(0,0,0,.12)', 1);
+        poly([P(x0, 1.3, z), P(x1, 1.3, z), P(x1, 1.3 + h, z), P(x0, 1.3 + h, z)], col);
+        poly([P(x0, 1.3 + h, z), P(x0, 1.3 + h, z + w), P(x1, 1.3 + h, z + w), P(x1, 1.3 + h, z)], roof);
+        for (let r = 0; r < Math.floor(h / 2); r++) seg(P(x0, 2.6 + r * 2, z + 0.6), P(x0, 2.6 + r * 2, z + w - 0.6), '#8fb3cf', Math.max(1, (P(x0, 2.6, z) || { s: 1 }).s * 0.3));
+      }]);
+    }
+    return items;
+  }
+  // Matsugae pier crowd and festival tents, standing on the quay
+  function crowd(side, z0, z1) {
+    const x0 = side * (Q + 0.2);
     const items = [];
-    if (withShip) items.push([z1 + 30, () => ship(side * 30, z0 + 10, z1 + 60)]);
     for (let z = z1; z > z0; z -= 1.5) items.push([z, () => {
-      const a = P(x0, 0, z), b = P(x0, 0, z - 1.5), c = P(x0, 1.3, z - 1.5), d = P(x0, 1.3, z); if (!a || !b) return;
-      poly([a, b, c, d], '#b9b2a4'); poly([d, c, P(x1, 1.3, z - 1.5), P(x1, 1.3, z)], '#d9d2c3');
-      const s = a.s, k = Math.round(z / 1.5);
-      if (k % 9 === 0) { // festival tent
-        poly([P(x0 + side * 0.6, 1.3, z), P(x0 + side * 0.6, 3.4, z), P(x0 + side * 3.2, 3.4, z), P(x0 + side * 3.2, 1.3, z)], k % 2 ? '#e8f1fb' : '#fff3e6');
-        poly([P(x0 + side * 0.3, 3.4, z), P(x0 + side * 1.9, 4.2, z), P(x0 + side * 3.5, 3.4, z)], k % 2 ? '#2c6ed5' : '#e63946');
+      const a = P(x0, 1.3, z); if (!a) return; const k = Math.round(z / 1.5);
+      if (k % 9 === 0) {
+        poly([P(x0 + side * 2.8, 1.3, z), P(x0 + side * 2.8, 3.4, z), P(x0 + side * 5.4, 3.4, z), P(x0 + side * 5.4, 1.3, z)], k % 2 ? '#e8f1fb' : '#fff3e6');
+        poly([P(x0 + side * 2.5, 3.4, z), P(x0 + side * 4.1, 4.2, z), P(x0 + side * 5.7, 3.4, z)], k % 2 ? '#2c6ed5' : '#e63946');
       }
       for (let r = 0; r < 3; r++) for (let j = 0; j < 2; j++) {
         const hx = x0 + side * (0.5 + r * 0.7), hz = z - j * 0.75 - 0.3, bob = Math.max(0, Math.sin(S.time * 6 + k * 1.7 + r + j)) * 0.12;
@@ -292,6 +328,7 @@ const Scene = (() => {
   function ship(x, z0, z1) {
     const side = Math.sign(x), xn = x - side * 3;
     const A = (y, z) => P(xn, y, z);
+    poly([P(xn, 0, z0), P(xn - side * 9, 0, z0), P(xn - side * 9, 6, z0), P(xn, 6, z0)], '#e7eef4', '#9fb3c2', 1);
     poly([A(0, z0), A(0, z1), A(6, z1), A(6, z0)], '#fbfdff', '#9fb3c2', 1);
     poly([A(0, z0), A(0, z1), A(1.4, z1), A(1.4, z0)], '#1f4e8c');
     poly([A(6, z0 + 6), A(6, z1 - 8), A(10, z1 - 12), A(10, z0 + 10)], '#f1f5f9', '#c7d3dc', 1);
@@ -440,13 +477,20 @@ const Scene = (() => {
     const list = [];
     // props for the current leg
     if (S.leg === 1) {
-      if (cam.z < 40) { list.push(...pier(1, -30, 26, false)); list.push([BOAT_L + 0.5, drawStartLine]); }
+      // heading north from Matsugae: the east bank (city side) is on the RIGHT, open harbour on the left
+      list.push(...shore(1, [[-1e4, S.buoyZ + 400, Q]]));
+      if (cam.z < 40) { list.push(...crowd(1, -30, 30)); list.push([BOAT_L + 0.5, drawStartLine]); }
       if (S.buoyZ - cam.z < 170) list.push([S.buoyZ, drawTurnBuoys]);
-      for (let k = 0; k < 40; k++) { const z = 30 + k * 37; if (z > S.buoyZ) break; const side = k % 2 ? 1 : -1; list.push([z, () => fishingBoat(side * (13 + hash(k, 1) * 3), z, k)]); }
+      for (let k = 0; k < 60; k++) { const z = 30 + k * 37; if (z > S.buoyZ) break; list.push([z, () => fishingBoat(-(13 + hash(k, 1) * 3), z, k)]); }
     } else {
-      list.push(...pier(-1, S.finishZ - 70, S.finishZ + 40, true));
-      if (S.finishZ - cam.z < 220) list.push([S.finishZ, () => drawGate(S.finishZ, 'GOAL  ゴール', '#e63946')]);
-      for (let k = 0; k < 40; k++) { const z = S.turnZ + 20 + k * 41; if (z > S.finishZ - 60) break; list.push([z, () => fishingBoat(13.5 + hash(k, 2) * 3, z, k + 2)]); }
+      // heading south back to Matsugae: the east bank is on the LEFT. After the goal the quay steps back
+      // to make a berth, and the cruise ship is docked there.
+      const fz = S.finishZ;
+      list.push(...shore(-1, [[S.turnZ - 50, fz + 6, Q], [fz + 6, fz + 400, 34]]));
+      list.push(...crowd(-1, fz - 70, fz + 5));
+      list.push([fz + 12, () => ship(-26, fz + 10, fz + 95)]);
+      if (fz - cam.z < 220) list.push([fz, () => drawGate(fz, 'GOAL  ゴール', '#e63946')]);
+      for (let k = 0; k < 60; k++) { const z = S.turnZ + 20 + k * 41; if (z > fz - 60) break; list.push([z, () => fishingBoat(13.5 + hash(k, 2) * 3, z, k + 2)]); }
     }
     for (const b of S.boats) list.push([b.z, () => boat(b)]);
     list.filter(([z]) => z - cam.z < 230).sort((a, b) => b[0] - a[0]).forEach(([, fn]) => fn());
