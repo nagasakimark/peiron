@@ -62,12 +62,12 @@ const Scene = (() => {
   /* ---------------- the real harbour (metres from the start line) ---------------- */
   // hills: [x, y, height, radius]  (east side = city / Minamiyamate / Tomachi, west side = Inasa / Tategami / Kiba)
   const HILLS = [
-    [-1667, 2030, 333, 420], [-1300, 2600, 250, 420], [-1450, 1200, 230, 420], [-1350, 450, 200, 380], [-1450, -250, 190, 380], [-1700, -900, 210, 420], [-2050, -1500, 180, 420], [-2500, -2200, 220, 600],
+    [-1667, 2030, 333, 420], [-1300, 2600, 250, 420], [-1450, 1200, 230, 420], [-1350, 450, 200, 380], [-1450, -250, 190, 380], [-1700, -900, 210, 420], [-2150, -1350, 170, 300],
     [187, 3684, 366, 520], [-500, 3200, 260, 450], [1000, 3100, 300, 480],
     [1470, 2397, 160, 380], [2000, 1800, 230, 420], [3156, 1398, 386, 650], [2300, 300, 330, 600], [1300, -200, 220, 420],
-    [118, -749, 169, 300], [90, -260, 55, 200], [700, -700, 160, 380], [-200, -1300, 120, 330], [-700, -1900, 200, 420], [300, -1800, 250, 480], [-1400, -2600, 200, 500]];
+    [118, -749, 169, 300], [90, -260, 55, 200], [700, -700, 160, 380], [-200, -1300, 120, 330], [-650, -1950, 190, 330], [300, -1800, 250, 480]];
   // each hill keeps one colour layer (by its distance from the middle of the course) so colours never pop
-  const URBAN = new Set([0, 1, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]);
+  const URBAN = new Set([0, 1, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]);
   const HLAYER = HILLS.map(([x, y]) => { const d = Math.hypot(x + 330, y + 230); return d > 4500 ? 0 : d > 2200 ? 1 : 2; });
   const LANDNAME = [ // landmark labels: [x, y, height, text]
     [-1667, 2030, 333, 'いなさやま'], [-860, 1150, 75, 'せかいいさんの クレーン'], [-1562, -1706, 175, 'めがみおおはし'],
@@ -123,7 +123,9 @@ const Scene = (() => {
         c.fillStyle = 'rgba(205,228,245,0.7)'; c.beginPath(); c.ellipse(x, y + 8 * k, 46 * k, 6 * k, 0, 0, 6.3); c.fill(); }); }
     // very distant haze ridge all round
     c.fillStyle = '#b5ccd8'; c.beginPath(); c.moveTo(0, HOR + 2);
-    for (let x = 0; x <= SW; x += 8) c.lineTo(x, HOR - 10 - 5 * Math.sin(x * 0.004) - 4 * Math.sin(x * 0.011 + 2));
+    for (let x = 0; x <= SW; x += 8) { const b = x / PXD, gap = Math.abs(angDiff(b, 221)) < 26;
+      const isle = gap ? 3 * Math.max(0, Math.sin((b - 200) * 0.9)) * (Math.abs(angDiff(b, 213)) < 4 ? 1 : 0) : 0;
+      c.lineTo(x, gap ? HOR - isle : HOR - 10 - 5 * Math.sin(x * 0.004) - 4 * Math.sin(x * 0.011 + 2)); }
     c.lineTo(SW, HOR + 2); c.fill();
   }
   function drawSky() {
