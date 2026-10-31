@@ -86,27 +86,25 @@
      a dry barrel-drum 「ドン」 and a bright, short Chinese-style ドラ 「ジャン」 */
   let noiseBuf = null;
   function noise() { if (noiseBuf) return noiseBuf; const n = AC.sampleRate; noiseBuf = AC.createBuffer(1, n, AC.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; return noiseBuf; }
-  function drum(vol, accent) {
+  function drum(vol, accent) {       // deep taiko 「ドーン」: low skin tone with a long, booming body
     if (!AC) return; const t = AC.currentTime + 0.004, out = AC.createGain(); out.gain.value = vol; out.connect(master);
-    const f0 = accent ? 118 : 132, o = AC.createOscillator(), g = AC.createGain(); o.type = 'sine';
-    o.frequency.setValueAtTime(f0 * 1.7, t); o.frequency.exponentialRampToValueAtTime(f0, t + 0.035); o.frequency.exponentialRampToValueAtTime(f0 * 0.85, t + 0.35);
-    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.9, t + 0.004); g.gain.exponentialRampToValueAtTime(0.001, t + (accent ? 0.45 : 0.28));
-    o.connect(g).connect(out); o.start(t); o.stop(t + 0.5);
-    const o2 = AC.createOscillator(), g2 = AC.createGain(); o2.frequency.setValueAtTime(f0 * 2.6, t); o2.frequency.exponentialRampToValueAtTime(f0 * 2.1, t + 0.1);
-    g2.gain.setValueAtTime(0.25, t); g2.gain.exponentialRampToValueAtTime(0.001, t + 0.09); o2.connect(g2).connect(out); o2.start(t); o2.stop(t + 0.15);
-    const n = AC.createBufferSource(), bp = AC.createBiquadFilter(), gn = AC.createGain(); n.buffer = noise(); bp.type = 'bandpass'; bp.frequency.value = 1500; bp.Q.value = 0.9;
-    gn.gain.setValueAtTime(accent ? 0.45 : 0.3, t); gn.gain.exponentialRampToValueAtTime(0.001, t + 0.035); n.connect(bp).connect(gn).connect(out); n.start(t); n.stop(t + 0.05);
+    const f0 = accent ? 62 : 70, dec = accent ? 1.1 : 0.6;
+    [[1, 1, dec], [1.52, 0.45, dec * 0.6], [2.3, 0.25, dec * 0.35]].forEach(([m, a, d]) => {
+      const o = AC.createOscillator(), g = AC.createGain(); o.type = 'sine';
+      o.frequency.setValueAtTime(f0 * m * 1.45, t); o.frequency.exponentialRampToValueAtTime(f0 * m, t + 0.06); o.frequency.exponentialRampToValueAtTime(f0 * m * 0.92, t + d);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(a, t + 0.006); g.gain.exponentialRampToValueAtTime(0.001, t + d);
+      o.connect(g).connect(out); o.start(t); o.stop(t + d + 0.05); });
+    const n = AC.createBufferSource(), lp = AC.createBiquadFilter(), gn = AC.createGain(); n.buffer = noise(); lp.type = 'lowpass'; lp.frequency.value = 700;
+    gn.gain.setValueAtTime(accent ? 0.5 : 0.35, t); gn.gain.exponentialRampToValueAtTime(0.001, t + 0.07); n.connect(lp).connect(gn).connect(out); n.start(t); n.stop(t + 0.1);
   }
-  function dora(vol, open) {
-    if (!AC) return; const t = AC.currentTime + 0.004, dur = open ? 0.75 : 0.2, out = AC.createGain(); out.gain.value = vol;
-    const hp = AC.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 300; hp.connect(out); out.connect(master);
-    [[392, 1], [571, 0.75], [823, 0.6], [1096, 0.45], [1447, 0.32], [1960, 0.22], [2610, 0.14]].forEach(([f, a], i) => {
-      const o = AC.createOscillator(), g = AC.createGain(); o.type = i < 2 ? 'triangle' : 'sine';
-      o.frequency.setValueAtTime(f * 1.015, t); o.frequency.exponentialRampToValueAtTime(f, t + 0.1);
-      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(a * 0.22, t + 0.003); g.gain.exponentialRampToValueAtTime(0.0005, t + dur * (1 - i * 0.06));
-      o.connect(g).connect(hp); o.start(t); o.stop(t + dur + 0.05); });
-    const n = AC.createBufferSource(), bp = AC.createBiquadFilter(), gn = AC.createGain(); n.buffer = noise(); bp.type = 'bandpass'; bp.frequency.value = 3400; bp.Q.value = 0.7;
-    gn.gain.setValueAtTime(0.3, t); gn.gain.exponentialRampToValueAtTime(0.001, t + (open ? 0.3 : 0.08)); n.connect(bp).connect(gn).connect(hp); n.start(t); n.stop(t + 0.35);
+  function dora(vol, open) {        // the small gong's bright 「チーン」 ting; damped for the short 「チン」
+    if (!AC) return; const t = AC.currentTime + 0.004, dur = open ? 0.9 : 0.16, out = AC.createGain(); out.gain.value = vol; out.connect(master);
+    [[1680, 1, 1], [4560, 0.45, 0.6], [8620, 0.18, 0.3], [2230, 0.25, 0.8]].forEach(([f, a, d]) => {
+      const o = AC.createOscillator(), g = AC.createGain(); o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(a * 0.3, t + 0.002); g.gain.exponentialRampToValueAtTime(0.0005, t + dur * d);
+      o.connect(g).connect(out); o.start(t); o.stop(t + dur + 0.05); });
+    const n = AC.createBufferSource(), bp = AC.createBiquadFilter(), gn = AC.createGain(); n.buffer = noise(); bp.type = 'highpass'; bp.frequency.value = 5000;
+    gn.gain.setValueAtTime(0.12, t); gn.gain.exponentialRampToValueAtTime(0.001, t + 0.02); n.connect(bp).connect(gn).connect(out); n.start(t); n.stop(t + 0.04);
   }
   function crowd(on) {
     if (on && !crowdSrc && BUF.crowd) { crowdSrc = sfx('crowd', 0.18); if (crowdSrc) crowdSrc.s.loop = true; }
@@ -248,7 +246,7 @@
     el.style.left = (p ? Math.max(120, Math.min(1160, p.x)) : 640) + 'px'; el.style.top = (p ? Math.max(70, p.y - 10) : 180) + 'px';
     $('popups').appendChild(el); setTimeout(() => el.remove(), 1200);
   }
-  function go() { state = 'race'; banner('ドン！<small>こげ！ ヨーイサー！</small>'); drum(0.6, true); dora(0.4, true); nextQ(); }
+  function go() { state = 'race'; banner('ドン！<small>こげ！ ヨーイサー！</small>'); drum(0.6, true); dora(0.25, true); nextQ(); }
 
   function dockIdle(msg) {
     $('card').innerHTML = `<div class="pic-one">${stk('peiron')}</div>`;
@@ -388,18 +386,18 @@
         else r.a += r.v * dt;
       }
       Scene.Course.pose(r);
-      const rateT = (state === 'title' || state === 'setup' || state === 'countdown') ? 0.8 : 1.6 + r.v * 0.42;
+      const rateT = (state === 'title' || state === 'setup' || state === 'countdown') ? 0.8 : Math.min(5.9, 4.2 + r.v * 0.07);
       r.rate = r.rate === undefined ? rateT : r.rate + (rateT - r.rate) * Math.min(1, dt / 1.6); r.phase += dt * r.rate;
       // 「ドーン、ドン、ジャーン、ジャン！」 — four beats per paddle stroke
       const beat = Math.floor(r.phase / (Math.PI / 2));
       if (beat !== r.beat) { r.beat = beat;
         if (r.v > 1.5 && beat % 4 === 0) Scene.splash(r, 5);
         if (r.isPlayer && r.v > 1.2 && racing) { const b = beat % 4, loud = Math.min(1, 0.55 + r.v / 30);
-          if (b === 0) drum(0.42 * loud, true); else if (b === 1) drum(0.3 * loud, false);
-          else if (b === 2) dora(0.2 * loud, true); else dora(0.13 * loud, false); } }
+          if (b === 0) drum(0.5 * loud, true); else if (b === 1) drum(0.36 * loud, false);
+          else if (b === 2) dora(0.16 * loud, true); else dora(0.11 * loud, false); } }
       if (racing && !r.finished && prog(r) >= trackLen) {
         r.finished = true; r.finishT = raceT;
-        if (r.isPlayer) { const pl = ranking().indexOf(r) + 1; banner(`ゴール！<small>${pl}い！</small>`); sfx('cheer', 0.4); dora(0.4, true); say('Goal!'); endT = 2.6; }
+        if (r.isPlayer) { const pl = ranking().indexOf(r) + 1; banner(`ゴール！<small>${pl}い！</small>`); sfx('cheer', 0.4); dora(0.25, true); say('Goal!'); endT = 2.6; }
       }
     }
     if (racing && player.finished) { endT -= dt; if (endT <= 0) showResults(); }
