@@ -89,7 +89,7 @@
   function drum(vol, accent) {       // deep taiko 「ドーン」: low skin tone with a long, booming body
     if (!AC) return; const t = AC.currentTime + 0.004, out = AC.createGain(); out.gain.value = vol; out.connect(master);
     const f0 = accent ? 62 : 70, dec = accent ? 1.1 : 0.6;
-    [[1, 1, dec], [1.52, 0.45, dec * 0.6], [2.3, 0.25, dec * 0.35]].forEach(([m, a, d]) => {
+    [[1, 1, dec], [1.52, 0.55, dec * 0.6], [2.3, 0.4, dec * 0.35]].forEach(([m, a, d]) => {
       const o = AC.createOscillator(), g = AC.createGain(); o.type = 'sine';
       o.frequency.setValueAtTime(f0 * m * 1.45, t); o.frequency.exponentialRampToValueAtTime(f0 * m, t + 0.06); o.frequency.exponentialRampToValueAtTime(f0 * m * 0.92, t + d);
       g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(a, t + 0.006); g.gain.exponentialRampToValueAtTime(0.001, t + d);
@@ -107,7 +107,7 @@
     gn.gain.setValueAtTime(0.12, t); gn.gain.exponentialRampToValueAtTime(0.001, t + 0.02); n.connect(bp).connect(gn).connect(out); n.start(t); n.stop(t + 0.04);
   }
   function crowd(on) {
-    if (on && !crowdSrc && BUF.crowd) { crowdSrc = sfx('crowd', 0.18); if (crowdSrc) crowdSrc.s.loop = true; }
+    if (on && !crowdSrc && BUF.crowd) { crowdSrc = sfx('crowd', 0.08); if (crowdSrc) crowdSrc.s.loop = true; }
     if (!on && crowdSrc) { try { crowdSrc.s.stop(); } catch (e) { } crowdSrc = null; }
   }
   let voiceEl = null; let enVoice = null;
@@ -241,7 +241,7 @@
     dockIdle('よーい…'); updateCombo(); $('dist').textContent = `あと ${Math.round(trackLen)}m`;
     $('trackTurn').style.left = (Scene.Course.out / trackLen * 100) + '%';
     state = 'countdown'; countT = 2.6; lastCount = 4; crowd(true); Scene.showLabels();
-    banner('よーい…'); drum(0.5, true);
+    banner('よーい…'); drum(0.9, true);
   }
   function banner(html, cls = '') { const b = $('banner'); b.className = ''; b.innerHTML = html; void b.offsetWidth; b.className = 'show ' + cls; }
   function popup(text, cls = '', b = player) {
@@ -249,7 +249,7 @@
     el.style.left = (p ? Math.max(120, Math.min(1160, p.x)) : 640) + 'px'; el.style.top = (p ? Math.max(70, p.y - 10) : 180) + 'px';
     $('popups').appendChild(el); setTimeout(() => el.remove(), 1200);
   }
-  function go() { state = 'race'; banner('ドン！<small>こげ！ ヨーイサー！</small>'); drum(0.6, true); dora(0.25, true); nextQ(); }
+  function go() { state = 'race'; banner('ドン！<small>こげ！ ヨーイサー！</small>'); drum(1.0, true); dora(0.14, true); nextQ(); }
 
   function dockIdle(msg) {
     $('card').innerHTML = `<div class="pic-one">${stk('peiron')}</div>`;
@@ -285,7 +285,7 @@
     const btns = document.querySelectorAll('.choice');
     btns.forEach(b => b.disabled = true);
     btns[i].classList.add(ok ? 'right' : 'wrong'); if (!ok) btns[1 - i].classList.add('right');
-    say(q.say);
+    // (sentences are no longer read aloud automatically; the review list still has a speaker button)
     if (ok) {
       correctN++; streak++;
       const boosted = streak >= 3; kick(player, boosted, quick(raceT - qShownT));
@@ -347,7 +347,6 @@
     showBoard();
     show('results'); $('hud').classList.add('hidden'); $('btnHome').classList.add('hidden');
     if (place <= 3) { sfx('fanfare', 0.35); confetti(); }
-    say(place === 1 ? 'You win!' : place <= 3 ? 'Great!' : 'Good try!');
   }
   /* ---------- online TOP-100 board ---------- */
   const lbKey = () => [cfg.len >= 1 ? 'long' : 'short', cfg.set.id];
@@ -451,12 +450,12 @@
       if (beat !== r.beat) { r.beat = beat;
         if (r.v > 1.5 && beat % 4 === 0) Scene.splash(r, 5);
         if (r.isPlayer && r.v > 1.2 && racing) { const b = beat % 4, loud = Math.min(1, 0.55 + r.v / 30);
-          if (b === 0) drum(0.5 * loud, true); else if (b === 1) drum(0.36 * loud, false);
-          else if (b === 2) dora(0.16 * loud, true); else dora(0.11 * loud, false); } }
+          if (b === 0) drum(1.0 * loud, true); else if (b === 1) drum(0.72 * loud, false);
+          else if (b === 2) dora(0.1 * loud, true); else dora(0.065 * loud, false); } }
       if (racing && !r.finished && prog(r) >= trackLen) {
         r.finished = true; const p1 = prog(r); r.finishT = Math.round((raceT - (p1 > p0 ? dt * (p1 - trackLen) / (p1 - p0) : 0)) * 1000) / 1000;
         if (r.isPlayer) lbJob = submitTime(r.finishT);
-        if (r.isPlayer) { const pl = ranking().indexOf(r) + 1; banner(`ゴール！<small>${pl}い！</small>`); sfx('cheer', 0.4); dora(0.25, true); say('Goal!'); endT = 2.6; }
+        if (r.isPlayer) { const pl = ranking().indexOf(r) + 1; banner(`ゴール！<small>${pl}い！</small>`); sfx('cheer', 0.3); dora(0.14, true); endT = 2.6; }
       }
     }
     if (racing && player.finished) { endT -= dt; if (endT <= 0) showResults(); }
