@@ -62,10 +62,10 @@ const Scene = (() => {
   /* ---------------- the real harbour (metres from the start line) ---------------- */
   // hills: [x, y, height, radius]  (east side = city / Minamiyamate / Tomachi, west side = Inasa / Tategami / Kiba)
   const HILLS = [
-    [-1667, 2030, 333, 420], [-1300, 2600, 250, 420], [-1450, 1200, 230, 420], [-1350, 450, 200, 380], [-1450, -250, 190, 380], [-1700, -900, 210, 420], [-2058, -1251, 220, 284],
+    [-1667, 2030, 333, 420], [-1300, 2600, 250, 420], [-1450, 1200, 230, 420], [-1350, 450, 200, 380], [-1450, -250, 190, 380], [-1700, -900, 210, 420], [-2073, -1237, 150, 347],
     [187, 3684, 366, 520], [-500, 3200, 260, 450], [1000, 3100, 300, 480],
     [1470, 2397, 160, 380], [2000, 1800, 230, 420], [3156, 1398, 386, 650], [2300, 300, 330, 600], [1300, -200, 220, 420],
-    [118, -749, 169, 300], [90, -260, 55, 200], [700, -700, 160, 380], [-200, -1300, 120, 330], [-1066, -2161, 320, 284], [300, -1800, 250, 480], [-2260, -1090, 240, 300], [-880, -2360, 250, 320], [-650, -1950, 170, 300]];
+    [118, -749, 169, 300], [90, -260, 55, 200], [700, -700, 160, 380], [-200, -1300, 120, 330], [-1051, -2175, 150, 347], [300, -1800, 250, 480], [-650, -1950, 140, 300]];
   // each hill keeps one colour layer (by its distance from the middle of the course) so colours never pop
   const URBAN = new Set([0, 1, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]);
   const HLAYER = HILLS.map(([x, y]) => { const d = Math.hypot(x + 330, y + 230); return d > 4500 ? 0 : d > 2200 ? 1 : 2; });
@@ -96,16 +96,18 @@ const Scene = (() => {
     // a hill may not spill over the water: its radius ends just past the nearest shoreline
     const segDist = (px, py, pts) => { let m = 1e9; for (let i = 1; i < pts.length; i++) { const [ax, ay] = pts[i - 1], [bx, by] = pts[i], dx = bx - ax, dy = by - ay;
       const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy))); m = Math.min(m, Math.hypot(px - ax - dx * t, py - ay - dy * t)); } return m; };
-    HW = HILLS.map(([x, y, , w]) => Math.min(w * 1.25, Math.min(segDist(x, y, EAST), segDist(x, y, WEST)) + 40));
+    const BRIDGE_HILLS = new Set([6, 19]);
+    HW = HILLS.map(([x, y, , w], i) => BRIDGE_HILLS.has(i) ? w * 1.25 : Math.min(w * 1.25, Math.min(segDist(x, y, EAST), segDist(x, y, WEST)) + 40));
     let k = 0;
     const CITY = ['#eef1f3', '#dde4e9', '#cfd8de', '#f3ece0', '#e7d9c9', '#c9d3dc', '#f6f3ee'];
     const along = (pts, side, fn) => { for (let i = 1; i < pts.length; i++) { const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], len = Math.hypot(x1 - x0, y1 - y0);
       const dx = (x1 - x0) / len, dy = (y1 - y0) / len, nx = dy * side, ny = -dx * side;   // n points inland
       for (let d = 0; d < len; d += 30) fn(x0 + dx * d, y0 + dy * d, nx, ny, Math.atan2(dx, dy) / D2R, k++); } };
-    along(EAST, 1, (x, y, nx, ny, ang, i) => { const off = 14 + hash(i, 2) * 20, X = x + nx * off, Y = y + ny * off; if (nearPier(X, Y)) return;
+    const backed = (X, Y, nx, ny) => hillAt(X + nx * 150, Y + ny * 150) > 20;
+    along(EAST, 1, (x, y, nx, ny, ang, i) => { const off = 14 + hash(i, 2) * 20, X = x + nx * off, Y = y + ny * off; if (nearPier(X, Y)) return; if (Y < 300 && !backed(X, Y, nx, ny)) return;
       const city = Y > 300, h = city ? 10 + hash(i, 1) * (Y > 1500 ? 45 : 30) : 6 + hash(i, 1) * 14;
       BUILD.push({ x: X, y: Y, ang, w: 12 + hash(i, 3) * 14, d: 10 + hash(i, 4) * 8, h, c: CITY[i % CITY.length], r: ['#5d7486', '#8a5a44', '#4f6b5a', '#6d6d7a'][i % 4] }); });
-    along(WEST, -1, (x, y, nx, ny, ang, i) => { const yard = y > -800 && y < 1600, off = 14 + hash(i, 2) * 20;
+    along(WEST, -1, (x, y, nx, ny, ang, i) => { const yard = y > -800 && y < 1600, off = 14 + hash(i, 2) * 20; if (!yard && !backed(x, y, nx, ny)) return;
       BUILD.push({ x: x + nx * off, y: y + ny * off, ang, w: yard ? 30 + hash(i, 3) * 30 : 12 + hash(i, 3) * 12, d: yard ? 18 + hash(i, 4) * 10 : 10, h: yard ? 14 + hash(i, 1) * 16 : 7 + hash(i, 1) * 12,
         c: yard ? (i % 3 ? '#a9b7c1' : '#8aa0ae') : CITY[i % CITY.length], r: yard ? '#6f8796' : '#7a5a48' }); });
     for (let i = 0; i < 2200; i++) {
@@ -130,7 +132,7 @@ const Scene = (() => {
     // very distant haze ridge all round
     c.fillStyle = '#b5ccd8'; c.beginPath(); c.moveTo(0, HOR + 2);
     for (let x = 0; x <= SW; x += 8) { const b = x / PXD, gap = Math.abs(angDiff(b, 221)) < 26;
-      const far = 2.5 + 1.5 * Math.sin(b * 0.7) + (Math.abs(angDiff(b, 214)) < 3 ? 3 : 0);
+      const e = Math.abs(angDiff(b, 221)), far = 2 + 1.2 * Math.sin(b * 0.7) + Math.max(0, (e - 9) / 17) * 9;   // low far shores slope down into the mouth
       c.lineTo(x, gap ? HOR - far : HOR - 10 - 5 * Math.sin(x * 0.004) - 4 * Math.sin(x * 0.011 + 2)); }
     c.lineTo(SW, HOR + 2); c.fill();
   }
