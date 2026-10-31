@@ -188,7 +188,7 @@
   function showSetup() {
     state = 'setup'; show('setup');
     $('setupMode').innerHTML = modeCard(cfg.set, 'div');
-    $('nameIn').value = cfg.name; $('factSetup').textContent = fact();
+    $('nameIn').value = cfg.name;
     $('segColor').innerHTML = COLORS.map(c => `<button data-v="${c.key}" style="background:${c.color};box-shadow:0 4px 0 ${c.dark}" class="${c.key === cfg.color ? 'on' : ''}">${c.kanji}</button>`).join('');
     seg('segColor', v => { cfg.color = v; store.set('color', v); idleRace(); });
     // preload this set's pictures
@@ -242,7 +242,7 @@
   }
   function banner(html, cls = '') { const b = $('banner'); b.className = ''; b.innerHTML = html; void b.offsetWidth; b.className = 'show ' + cls; }
   function popup(text, cls = '', b = player) {
-    const p = Scene.screenOf(b, 3.6); const el = document.createElement('div'); el.className = 'pop ' + cls; el.textContent = text;
+    const p = b === player ? { x: 640, y: 300 } : Scene.screenOf(b, 3.6); const el = document.createElement('div'); el.className = 'pop ' + cls; el.textContent = text;
     el.style.left = (p ? Math.max(120, Math.min(1160, p.x)) : 640) + 'px'; el.style.top = (p ? Math.max(70, p.y - 10) : 180) + 'px';
     $('popups').appendChild(el); setTimeout(() => el.remove(), 1200);
   }
@@ -287,13 +287,13 @@
       correctN++; streak++;
       const boosted = streak >= 3; kick(player, boosted);
       if (player.leg === 'turn') { player.nice = 1.6; popup('ナイスターン！', 'gold'); }
-      sfx('correct', 0.55);
+      sfx('correct', 0.2);
       Scene.splash(player, 14, 1.2, boosted);
-      if (player.leg !== 'turn') { if (boosted) { sfx('boost', 0.6); Scene.shake(0.6); popup(streak === 3 ? 'ヨーイサー！' : streak + ' れんぞく！', 'gold'); }
-        else popup(pick(['Nice!', 'Great!', 'Good!', 'Yes!', 'いいね！'])); }
+      if (player.leg !== 'turn') { if (boosted) { sfx('boost', 0.3); Scene.shake(0.6); popup(streak === 3 ? 'ヨーイサー！' : streak + ' れんぞく！', 'gold'); }
+        else popup(pick(['Nice!', 'Great!', 'Good!', 'Yes!', 'いいね！', 'やったね！'])); }
     } else {
       streak = 0; stumble(player); missed.push(q); deck.again(q, qCount); if (player.leg === 'turn') player.nice = -1.2;
-      sfx('wrong', 0.6); Scene.splash(player, 26, 0.6); popup('ざんねん…', 'bad');
+      sfx('wrong', 0.28); Scene.splash(player, 26, 0.6); popup('おしい！', 'bad');
     }
     updateCombo();
     setTimeout(() => {
@@ -327,22 +327,22 @@
     const best = store.get('best', {}); const prev = best[cfg.set.id];
     const isBest = !prev || place < prev.place || (place === prev.place && player.finishT < prev.time);
     if (isBest) { best[cfg.set.id] = { place, time: +player.finishT.toFixed(1) }; store.set('best', best); }
-    const head = ['🥇 1st place!', '🥈 2nd place!', '🥉 3rd place!', '4th place'][place - 1];
-    const jp = ['やったね！ 1いだ！', 'すごい！ 2い！', 'がんばった！ 3い！', 'つぎは がんばろう！'][place - 1];
-    $('resHead').innerHTML = `${head}<small>${jp}</small>`;
-    const heights = [122, 106, 94, 86], podOrder = [1, 0, 2, 3];
+    const jp = ['やったね！ 1いだ！', 'すごい！ 2い！', 'がんばった！ 3い！', 'よく がんばったね！'][place - 1];
+    const stars = acc >= 90 ? 3 : acc >= 70 ? 2 : 1;
+    $('resHead').innerHTML = `<div class="medal big m${place}"><b>${place}</b><i>${['st', 'nd', 'rd', 'th'][place - 1]}</i></div>
+      <div class="rh"><div class="msg">${jp}</div><div class="stars3">${[1, 2, 3].map(k => `<span class="${k <= stars ? 'on' : ''}" style="animation-delay:${0.25 + k * 0.18}s">★</span>`).join('')}</div></div>`;
+    const heights = [100, 86, 76, 68], podOrder = [1, 0, 2, 3];
     $('podium').innerHTML = podOrder.map(k => { const r = order[k]; if (!r) return '';
       return `<div class="pod ${r.isPlayer ? 'me' : ''}" style="height:${heights[k]}px;background:${r.color}"><b>${ord(k + 1)}</b><span>${esc(r.name)}</span>${r.finished ? `<em>${fmtT(r.finishT)}</em>` : ''}</div>`; }).join('');
-    const gap = place === 1 ? (order[1] && order[1].finished ? ` ・ 2いと ${(order[1].finishT - player.finishT).toFixed(2)}びょう さ` : '') : (order[0].finished ? ` ・ 1いと ${(player.finishT - order[0].finishT).toFixed(2)}びょう さ` : '');
-    $('resStats').innerHTML = `せいかい ${correctN} / ${answered}（${acc}%） ・ タイム ${fmtT(player.finishT)}${gap}${isBest ? '<span class="best">ベスト！</span>' : ''}`;
+    $('resStats').innerHTML = `<span class="st"><small>せいかい</small><b>${correctN}</b><small>/ ${answered}</small></span><span class="st"><small>タイム</small><b>${fmtT(player.finishT)}</b></span>${isBest ? '<span class="best">ベスト！</span>' : ''}`;
     $('factRes').textContent = fact();
     const seen = new Set(), list = missed.filter(m => !seen.has(m.say) && seen.add(m.say));
     $('review').innerHTML = list.length ? list.map((m, k) => {
       const full = (m.top ? esc(m.top) + ' ' : '') + esc(m.pre) + `<b>${esc(m.correct)}</b>` + esc(m.post) + (m.bot ? ' ' + esc(m.bot) : '');
-      return `<div class="rev"><button data-k="${k}">🔊</button><span>${full}</span></div>`; }).join('') : '<div class="perfect">パーフェクト！ ぜんぶ せいかい！ 🎉</div>';
+      return `<div class="rev"><button data-k="${k}"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="#fff"/><path d="M16 8.5a5 5 0 0 1 0 7" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg></button><span>${full}</span></div>`; }).join('') : '<div class="perfect">パーフェクト！ ぜんぶ せいかい！</div>';
     $('review').querySelectorAll('button').forEach(b => b.onclick = () => say(list[+b.dataset.k].say));
     show('results'); $('hud').classList.add('hidden'); $('btnHome').classList.add('hidden');
-    if (place <= 3) { sfx('fanfare', 0.7); confetti(); }
+    if (place <= 3) { sfx('fanfare', 0.35); confetti(); }
     say(place === 1 ? 'You win!' : place <= 3 ? 'Great!' : 'Good try!');
   }
   function confetti() {
@@ -377,7 +377,7 @@
       r.v += (want - r.v) * Math.min(1, dt * 2.4);
       if (racing || state === 'results') {
         if (r.leg === 1) { r.a += r.v * dt; if (r.a >= C.out) { r.leg = 'turn'; r.phi = 0; r.nice = 0;
-            if (r.isPlayer) { banner('ターン！<small>ブイを まわれ！</small>'); sfx('whoosh', 0.7); sfx('cheer', 0.35); Scene.showLabels(); } } }
+            if (r.isPlayer) { banner('ターン！<small>ブイを まわれ！</small>'); sfx('whoosh', 0.35); sfx('cheer', 0.25); Scene.showLabels(); } } }
         else if (r.leg === 'turn') {
           const base = Math.PI / (r.isPlayer ? 3.2 : TURN_T[2 - cfg.cpu] * (0.9 + rnd() * 0.2));
           const k = r.nice > 0 ? 1.9 : r.nice < 0 ? 0.55 : 1; r.nice = r.nice > 0 ? Math.max(0, r.nice - dt) : Math.min(0, r.nice + dt);
@@ -410,7 +410,7 @@
     const tb = $('trackBoats');
     if (tb.children.length !== racers.length) tb.innerHTML = racers.map(r => `<div class="${r.isPlayer ? 'me' : ''}" style="background:${r.color}"></div>`).join('');
     racers.forEach((r, k) => tb.children[k].style.left = (Math.min(1, prog(r) / trackLen) * 100) + '%');
-    $('dist').textContent = player.finished ? 'ゴール！' : `あと ${Math.max(0, Math.round(trackLen - prog(player)))}m`;
+    $('dist').textContent = player.finished ? 'ゴール！' : `ゴールまで ${Math.max(0, Math.round(trackLen - prog(player)))}m`;
   }
   let last = performance.now();
   function frame(t) { const dt = Math.min(0.05, (t - last) / 1000); last = t; requestAnimationFrame(frame);
