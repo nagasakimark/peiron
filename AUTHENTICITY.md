@@ -43,6 +43,8 @@ Each item lists the real-world fact (with a source), what the game did before, a
 
 | 24 | Buildings | stand on land along the shore | flat cut-outs floating on the water, jerky ❌ | ✅ land drawn between shore and hills; nearby buildings are real 3D boxes on the quay |
 
+| 25 | Harbour look (checked against Mark's panorama from Glover Garden) | Mitsubishi yard crowded with red-white lattice, mint-green and red gantry cranes; a repair dockyard below Glover Garden; deep green forested ridges with houses on Inasayama's slopes and the city side; white antennas on Inasayama; deep navy water | a few red cranes, pale teal hills, cyan water ❌ | ✅ matched; `Scene.viewFrom(40,-330,295,45)` renders the Glover Garden view for comparison |
+
 ## Still to do (needs fal top-up)
 - Recorded 「ヨーイサー！」 crew shout and a real 太鼓/ドラ loop.
 - Missing stickers (29) and voices (88).

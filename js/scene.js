@@ -7,13 +7,13 @@
    Out 630 m, back 520 m, as in the real 長崎ペーロン選手権大会. See AUTHENTICITY.md. */
 'use strict';
 const Scene = (() => {
-  const W = 1280, H = 395, HOR = 150, CAMH = 3.4, F = 640, L = 13.6, D2R = Math.PI / 180;
+  const W = 1280, H = 395, HOR = 150, F = 640, L = 13.6, D2R = Math.PI / 180;
   const PXD = F * D2R;
   const fwd = b => [Math.sin(b * D2R), Math.cos(b * D2R)];
   const rgt = b => [Math.cos(b * D2R), -Math.sin(b * D2R)];
   const angDiff = (a, b) => ((a - b + 540) % 360) - 180;
   const hash = (a, b) => { const v = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return v - Math.floor(v); };
-  let cv, ctx, RES = 1, sky, PRES = 1;
+  let cv, ctx, RES = 1, sky, PRES = 1, CAMH = 3.4;   // camera height (m) — the boat view uses 3.4
   const cam = { x: 0, y: 0, h: 285, fx: 0, fy: 1, rx: 1, ry: 0, shake: 0 };
   const S = { time: 0, boats: [], parts: [], boostFx: 0, labelA: 0, labelT: 0, travelled: 0 };
 
@@ -62,12 +62,13 @@ const Scene = (() => {
   /* ---------------- the real harbour (metres from the start line) ---------------- */
   // hills: [x, y, height, radius]  (east side = city / Minamiyamate / Tomachi, west side = Inasa / Tategami / Kiba)
   const HILLS = [
-    [-1667, 2030, 333, 420], [-1300, 2600, 250, 420], [-1450, 1200, 230, 420], [-1400, 400, 190, 420], [-1500, -300, 180, 420], [-1900, -1100, 200, 480], [-2500, -2200, 220, 600],
+    [-1667, 2030, 333, 420], [-1300, 2600, 250, 420], [-1450, 1200, 230, 420], [-1350, 450, 200, 380], [-1450, -250, 190, 380], [-1700, -900, 210, 420], [-2050, -1500, 180, 420], [-2500, -2200, 220, 600],
     [187, 3684, 366, 520], [-500, 3200, 260, 450], [1000, 3100, 300, 480],
     [1470, 2397, 160, 380], [2000, 1800, 230, 420], [3156, 1398, 386, 650], [2300, 300, 330, 600], [1300, -200, 220, 420],
     [118, -749, 169, 300], [90, -260, 55, 200], [700, -700, 160, 380], [-200, -1300, 120, 330], [-700, -1900, 200, 420], [300, -1800, 250, 480], [-1400, -2600, 200, 500]];
   // each hill keeps one colour layer (by its distance from the middle of the course) so colours never pop
-  const HLAYER = HILLS.map(([x, y]) => { const d = Math.hypot(x + 330, y + 230); return d > 2600 ? 0 : d > 1300 ? 1 : 2; });
+  const URBAN = new Set([0, 1, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]);
+  const HLAYER = HILLS.map(([x, y]) => { const d = Math.hypot(x + 330, y + 230); return d > 4500 ? 0 : d > 2200 ? 1 : 2; });
   const LANDNAME = [ // landmark labels: [x, y, height, text]
     [-1667, 2030, 333, 'いなさやま'], [-860, 1150, 75, 'せかいいさんの クレーン'], [-1562, -1706, 175, 'めがみおおはし'],
     [180, -180, 70, 'おおうらてんしゅどう'], [40, -330, 70, 'グラバーえん'], [118, -749, 169, 'なべかんむりやま'],
@@ -80,7 +81,14 @@ const Scene = (() => {
   const WEST = [[-1998, -1608], [-1872, -1558], [-1724, -1478], [-1539, -1378], [-1414, -1167], [-1283, -915], [-1106, -694], [-981, -483], [-913, -256], [-876, -6],
     [-907, 245], [-921, 553], [-880, 900], [-820, 1300], [-700, 1700], [-600, 2100], [-450, 2600]];
   const PIER_A = [-40, -165], PIER_B = [60, 200];   // the Matsugae quay
-  const BUILD = [], HOUSES = [], CRANES = [[-860, 1150, 'giant'], [-930, 420, 'jib'], [-940, 120, 'jib'], [-960, -330, 'jib'], [-830, 1500, 'jib'], [-1150, -760, 'jib']];
+  const BUILD = [], HOUSES = [];
+  // Mitsubishi shipyard cranes along the west shore (red-white lattice, mint-green, red gantry frames), the 1909 Giant
+  // Cantilever Crane at Akunoura, and the small repair dockyard below Glover Garden on the east shore.
+  const CRANES = [[-860, 1150, 'giant'], [-905, 820, 'lattice'], [-920, 640, 'green'], [-930, 470, 'gantry'], [-925, 330, 'lattice'], [-915, 180, 'green'],
+    [-905, 40, 'lattice'], [-905, -100, 'gantry'], [-930, -250, 'lattice'], [-965, -400, 'green'], [-1030, -560, 'lattice'], [-1120, -720, 'green'],
+    [-830, 1450, 'lattice'], [-760, 1750, 'green'],
+    [-30, -230, 'lattice'], [-60, -300, 'green'], [-120, -400, 'lattice'], [-175, -455, 'green']];
+  const MOORED = [[-75, -265, 1], [-150, -430, 1], [-880, 300, -1], [-870, -40, -1], [-940, -330, -1], [-880, 700, -1]];   // work ships alongside the yards
   const nearPier = (x, y) => x > -80 && x < 140 && y > -220 && y < 260;
   (function genWorld() {
     let k = 0;
@@ -94,11 +102,11 @@ const Scene = (() => {
     along(WEST, -1, (x, y, nx, ny, ang, i) => { const yard = y > -800 && y < 1600, off = 14 + hash(i, 2) * 20;
       BUILD.push({ x: x + nx * off, y: y + ny * off, ang, w: yard ? 30 + hash(i, 3) * 30 : 12 + hash(i, 3) * 12, d: yard ? 18 + hash(i, 4) * 10 : 10, h: yard ? 14 + hash(i, 1) * 16 : 7 + hash(i, 1) * 12,
         c: yard ? (i % 3 ? '#a9b7c1' : '#8aa0ae') : CITY[i % CITY.length], r: yard ? '#6f8796' : '#7a5a48' }); });
-    for (let i = 0; i < 1500; i++) {
+    for (let i = 0; i < 2200; i++) {
       const hi = Math.floor(hash(i, 5) * HILLS.length), hl = HILLS[hi], a = hash(i, 6) * 6.283, rr = Math.sqrt(hash(i, 7)) * hl[3] * 1.2;
       const X = hl[0] + Math.cos(a) * rr, Y = hl[1] + Math.sin(a) * rr, e = hillAt(X, Y); if (e < 8) continue;
-      const tree = hash(i, 8) < 0.45 || e > hl[2] * 0.75;
-      HOUSES.push({ x: X, y: Y, e, L: HLAYER[hi], hi, tree, c: tree ? 'rgba(48,104,70,0.55)' : CITY[i % CITY.length] });
+      const tree = !URBAN.has(hi) || hash(i, 8) < 0.4 || e > hl[2] * (hi === 0 ? 0.55 : 0.75);
+      HOUSES.push({ x: X, y: Y, e, L: HLAYER[hi], hi, tree, c: tree ? (i % 2 ? 'rgba(30,80,48,0.55)' : 'rgba(70,130,80,0.45)') : CITY[i % CITY.length] });
     }
   })();
 
@@ -127,18 +135,18 @@ const Scene = (() => {
   /* ---------------- hills, houses, shore buildings, landmarks ---------------- */
   const COLS = W / 4 + 1, LAYERS = [new Float32Array(COLS), new Float32Array(COLS), new Float32Array(COLS)];
   const layerOf = z => z > 2600 ? 0 : z > 1100 ? 1 : 2;
-  const LAYER_COL = ['#98bccc', '#6f9f8b', '#5b9169'];
+  const LAYER_COL = ['#7d9ea2', '#457c52', '#3b7449'];
   function drawLand() {
     LAYERS.forEach(a => a.fill(0));
     HILLS.forEach(([X, Y, h, w], hi) => {
       const [lx, z] = rel(X, Y); if (z < 60) return;
-      const cx = W / 2 + F * lx / z, hp = F * h / z, wp = F * w / z, La = LAYERS[HLAYER[hi]];
+      const cx = W / 2 + F * lx / z, hp = F * (h - CAMH) / z, wp = F * w / z, La = LAYERS[HLAYER[hi]];
       const i0 = Math.max(0, Math.floor((cx - 2.6 * wp) / 4)), i1 = Math.min(COLS - 1, Math.ceil((cx + 2.6 * wp) / 4));
       for (let i = i0; i <= i1; i++) { const d = (i * 4 - cx) / wp, v = hp * Math.exp(-d * d); if (v > La[i]) La[i] = v; }
     });
     const hb = [[], [], []], hillZ = HILLS.map(([X, Y]) => rel(X, Y)[1]);
     for (const o of HOUSES) { if (hillZ[o.hi] < 60) continue; const [lx, z] = rel(o.x, o.y); if (z < 150) continue; const s = F / z, x = W / 2 + lx * s; if (x < -10 || x > W + 10) continue;
-      hb[o.L].push([x, HOR - o.e * s, Math.max(1.2, 9 * s), Math.max(1, 6 * s), o]); }
+      hb[o.L].push([x, HOR + (CAMH - o.e) * s, Math.max(1.2, 9 * s), Math.max(1, 6 * s), o]); }
     for (let k = 0; k < 3; k++) {
       const La = LAYERS[k]; ctx.fillStyle = LAYER_COL[k]; ctx.beginPath(); ctx.moveTo(0, HOR + 3);
       for (let i = 0; i < COLS; i++) ctx.lineTo(i * 4, HOR + 1 - La[i]); ctx.lineTo(W, HOR + 3); ctx.closePath(); ctx.fill();
@@ -166,9 +174,9 @@ const Scene = (() => {
   }
   function drawInasaTowers() {
     const [lx, z] = rel(-1667, 2030); if (z < 100) return; const s = F / z, x = W / 2 + lx * s;
-    [[-40, 110], [-12, 140], [18, 105], [42, 80]].forEach(([dx, h]) => { const top = HOR - (333 + h) * s, bx = x + dx * s;
-      ctx.fillStyle = '#e23b2e'; ctx.fillRect(bx - 1.5, top, 3, h * s); ctx.fillStyle = '#fff'; for (let j = 0; j < h * s; j += 6) ctx.fillRect(bx - 1.5, top + j, 3, 3); });
-    ctx.fillStyle = '#e6ecef'; ctx.fillRect(x - 30 * s, HOR - 345 * s, 60 * s, 12 * s);
+    [[-40, 60], [-12, 80], [18, 55], [42, 45]].forEach(([dx, h]) => { const top = HOR + (CAMH - 333 - h) * s, bx = x + dx * s;
+      ctx.fillStyle = '#f1f4f6'; ctx.fillRect(bx - 1.2, top, 2.4, h * s); ctx.fillStyle = '#e46a5c'; ctx.fillRect(bx - 1.2, top, 2.4, Math.max(1, h * s * 0.12)); });
+    ctx.fillStyle = '#e6ecef'; ctx.fillRect(x - 30 * s, HOR + (CAMH - 345) * s, 60 * s, 12 * s);
   }
   // a building as a flat facade facing the camera (cheap, fine at a distance)
   function obox(o) {   // oriented box (building) sitting on the land
@@ -193,16 +201,35 @@ const Scene = (() => {
       if (p && prev) { ctx.lineWidth = Math.max(1, F / z * 1.5); ctx.beginPath(); ctx.moveTo(prev.x, prev.y); ctx.lineTo(p.x, p.y); ctx.stroke(); } prev = p; }
   }
   function crane(x, y, kind) {
-    const [lx, z] = rel(x, y); if (z < 40) return; const s = F / z, cx = W / 2 + lx * s, base = HOR + CAMH * s;
-    if (kind === 'giant') {   // the 1909 Giant Cantilever Crane (hammerhead), 61.7 m
+    const [lx, z] = rel(x, y); if (z < 40) return; const s = F / z, cx = W / 2 + lx * s, base = HOR + (CAMH - 1.4) * s;
+    if (cx < -100 || cx > W + 100) return;
+    const lw = Math.max(0.8, 1.2 * s);
+    if (kind === 'giant') {   // 1909 Giant Cantilever Crane (hammerhead), 61.7 m, dark steel
       ctx.fillStyle = '#2d3a44'; ctx.fillRect(cx - 6 * s, base - 50 * s, 12 * s, 50 * s);
       ctx.fillRect(cx - 45 * s, base - 62 * s, 75 * s, 8 * s); ctx.fillRect(cx - 45 * s, base - 58 * s, 14 * s, 10 * s); ctx.fillRect(cx + 24 * s, base - 54 * s, 2 * s, 18 * s);
-      ctx.strokeStyle = '#2d3a44'; ctx.lineWidth = Math.max(0.7, s); for (let k = 0; k < 8; k++) { ctx.beginPath(); ctx.moveTo(cx - 6 * s, base - k * 6 * s); ctx.lineTo(cx + 6 * s, base - (k + 1) * 6 * s); ctx.stroke(); }
-    } else {
-      ctx.fillStyle = '#d8392b'; ctx.fillRect(cx - 1.5 * s, base - 40 * s, 3 * s, 40 * s);
-      ctx.strokeStyle = '#d8392b'; ctx.lineWidth = Math.max(1.2, 2.5 * s); ctx.beginPath(); ctx.moveTo(cx, base - 38 * s); ctx.lineTo(cx + 30 * s, base - 50 * s); ctx.stroke();
-      ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(0.6, 1 * s); ctx.stroke();
+      ctx.strokeStyle = '#2d3a44'; ctx.lineWidth = lw; for (let k = 0; k < 8; k++) { ctx.beginPath(); ctx.moveTo(cx - 6 * s, base - k * 6 * s); ctx.lineTo(cx + 6 * s, base - (k + 1) * 6 * s); ctx.stroke(); }
+    } else if (kind === 'lattice') {   // tall red-and-white lattice tower with a long angled jib
+      const h = 55 * s, j = 60 * s, sd = hash(x, y) < 0.5 ? -1 : 1;
+      for (let k = 0; k < 6; k++) { ctx.fillStyle = k % 2 ? '#f4f4f2' : '#d8392b'; ctx.fillRect(cx - 2 * s, base - h + k * h / 6, 4 * s, h / 6 + 0.5); }
+      ctx.strokeStyle = '#d8392b'; ctx.lineWidth = Math.max(1, 2.2 * s); ctx.beginPath(); ctx.moveTo(cx, base - h * 0.9); ctx.lineTo(cx + sd * j * 0.55, base - h - j * 0.75); ctx.stroke();
+      ctx.strokeStyle = '#f4f4f2'; ctx.lineWidth = Math.max(0.6, 0.8 * s); ctx.beginPath(); ctx.moveTo(cx, base - h); ctx.lineTo(cx + sd * j * 0.55, base - h - j * 0.75); ctx.stroke();
+      ctx.fillStyle = '#d8392b'; ctx.fillRect(cx - 5 * s, base - h - 3 * s, 10 * s, 5 * s);
+    } else if (kind === 'green') {     // mint-green level-luffing crane
+      const h = 40 * s, sd = hash(y, x) < 0.5 ? -1 : 1;
+      ctx.fillStyle = '#9fd8bf'; ctx.fillRect(cx - 3 * s, base - h, 6 * s, h); ctx.fillRect(cx - 7 * s, base - h - 6 * s, 14 * s, 8 * s);
+      ctx.strokeStyle = '#86c7ab'; ctx.lineWidth = Math.max(1, 2.5 * s); ctx.beginPath(); ctx.moveTo(cx, base - h); ctx.lineTo(cx + sd * 34 * s, base - h - 14 * s); ctx.stroke();
+      ctx.strokeStyle = '#5b6b70'; ctx.lineWidth = Math.max(0.5, 0.5 * s); ctx.beginPath(); ctx.moveTo(cx + sd * 34 * s, base - h - 14 * s); ctx.lineTo(cx + sd * 34 * s, base - h + 12 * s); ctx.stroke();
+    } else {                           // red gantry (goliath) frame over a dock
+      ctx.fillStyle = '#c9362a'; ctx.fillRect(cx - 30 * s, base - 42 * s, 60 * s, 6 * s); ctx.fillRect(cx - 30 * s, base - 42 * s, 4 * s, 42 * s); ctx.fillRect(cx + 26 * s, base - 42 * s, 4 * s, 42 * s);
+      ctx.fillStyle = '#e9e4da'; ctx.fillRect(cx - 6 * s, base - 46 * s, 12 * s, 5 * s);
     }
+  }
+  function moored(x, y, side) {     // work ship tied up at a yard: dark hull, white superstructure
+    const [lx, z] = rel(x, y); if (z < 40) return; const s = F / z, cx = W / 2 + lx * s, wl = HOR + CAMH * s;
+    if (cx < -150 || cx > W + 150) return;
+    const len = 70 * s * (0.6 + 0.4 * Math.abs(Math.sin((cam.h - 40) * D2R)));
+    ctx.fillStyle = side > 0 ? '#2f5d8a' : '#3a4f63'; ctx.fillRect(cx - len / 2, wl - 6 * s, len, 6 * s);
+    ctx.fillStyle = '#f2f4f5'; ctx.fillRect(cx - len * 0.15, wl - 16 * s, len * 0.35, 10 * s); ctx.fillRect(cx + len * 0.05, wl - 22 * s, len * 0.12, 6 * s);
   }
   function megami() {  // Megami Bridge: 880 m cable-stayed, H-shaped 170 m towers, deck 65 m, crossing the harbour mouth
     const C = [-1562, -1706], d = fwd(312.5), at = t => [C[0] + d[0] * t, C[1] + d[1] * t];
@@ -392,9 +419,9 @@ const Scene = (() => {
 
   /* ---------------- water & particles ---------------- */
   function drawWater() {
-    const g = ctx.createLinearGradient(0, HOR, 0, H); g.addColorStop(0, '#8fc6dc'); g.addColorStop(0.07, '#4f9fc3'); g.addColorStop(1, '#155d8c');
+    const g = ctx.createLinearGradient(0, HOR, 0, H); g.addColorStop(0, '#6d97c2'); g.addColorStop(0.07, '#3d6fa6'); g.addColorStop(1, '#1d4f86');
     ctx.fillStyle = g; ctx.fillRect(0, HOR, W, H - HOR);
-    const rg = ctx.createLinearGradient(0, HOR, 0, HOR + 26); rg.addColorStop(0, 'rgba(110,160,130,0.35)'); rg.addColorStop(1, 'rgba(110,160,130,0)');
+    const rg = ctx.createLinearGradient(0, HOR, 0, HOR + 26); rg.addColorStop(0, 'rgba(80,130,100,0.3)'); rg.addColorStop(1, 'rgba(80,130,100,0)');
     ctx.fillStyle = rg; ctx.fillRect(0, HOR, W, 26);
     const pan = cam.h * 0.35, base = Math.floor(S.travelled / 2.6), frac = S.travelled - base * 2.6;
     for (let i = 52; i >= 1; i--) { const zi = base + i, z = i * 2.6 - frac; if (z < 1.2) continue; const s = F / z;
@@ -459,7 +486,8 @@ const Scene = (() => {
     if (opts.idle) target = Course.H1 + Math.sin(S.time * 0.12) * 32;
     cam.smoothH += angDiff(target, cam.smoothH) * Math.min(1, dt * (opts.idle ? 3 : 1.8));
     const f = fwd(cam.smoothH), r = rgt(cam.smoothH), back = 9.9 + L / 2;
-    setCam(player.px - f[0] * back + r[0] * 1.6, player.py - f[1] * back + r[1] * 1.6, cam.smoothH);
+    setCam(player.px - f[0] * back + r[0] * 1.6, player.py - f[1] * back + r[1] * 1.6, cam.smoothH); CAMH = 3.4;
+    if (S.debugCam) { setCam(S.debugCam.x, S.debugCam.y, S.debugCam.h); CAMH = S.debugCam.height; }
     S.boostFx += ((player.boost > 0 ? 1 : 0) - S.boostFx) * Math.min(1, dt * 4);
     if (player.boost > 0 && Math.random() < 0.6) bowSpray(player);
     cam.shake = Math.max(0, cam.shake - dt * 3);
@@ -476,6 +504,7 @@ const Scene = (() => {
     const far = [];
     for (const o of BUILD) { const z = depth(o.x, o.y); if (z > 30 && z < 4000) far.push([z, () => facade(o)]); }
     for (const [x, y, k] of CRANES) far.push([depth(x, y), () => crane(x, y, k)]);
+    for (const [x, y, sd] of MOORED) far.push([depth(x, y), () => moored(x, y, sd)]);
     far.push([depth(-1562, -1706), megami], [depth(180, -180), ouraCathedral], [depth(40, -330), gloverHouse], [depth(300, 900), dejimaWharf]);
     far.sort((a, b) => b[0] - a[0]).forEach(([z, fn]) => { if (z > 30) fn(); });
     drawLabels();
@@ -485,6 +514,8 @@ const Scene = (() => {
     list.filter(([z]) => z > -20 && z < 900).sort((a, b) => b[0] - a[0]).forEach(([, fn]) => fn());
     drawParts(dt); speedLines();
   }
+  // debug: view from any point/height, e.g. Scene.viewFrom(40, -330, 255, 50) = Glover Garden
+  function viewFrom(x, y, h, height) { S.debugCam = { x, y, h, height }; }
   function screenOf(b, y = 3.2) { return PW(b.px, b.py, y); }
-  return { init, resize, setRace, update, render, splash, screenOf, Course, L, showLabels, shake: v => cam.shake = Math.max(cam.shake, v), cam, S };
+  return { viewFrom, init, resize, setRace, update, render, splash, screenOf, Course, L, showLabels, shake: v => cam.shake = Math.max(cam.shake, v), cam, S };
 })();
