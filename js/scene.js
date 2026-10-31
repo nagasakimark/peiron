@@ -50,61 +50,6 @@ const Scene = (() => {
   }
   function seg(a, b, col, w) { if (!a || !b) return; ctx.strokeStyle = col; ctx.lineWidth = Math.max(0.7, w); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
   function dot(p, r, col) { if (!p) return; ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(0.6, r), 0, 6.283); ctx.fillStyle = col; ctx.fill(); }
-  /* ---- inked "comic" look: black outlines, hard cel shading ---- */
-  const INK = '#10101a', SKIN = '#f0b88a', SKIN_D = '#c98458';
-  const _sh = new Map();
-  function shade(hex, k) { const key = hex + k; let r = _sh.get(key); if (r) return r;
-    const n = parseInt(hex.slice(1), 16), c = v => Math.max(0, Math.min(255, Math.round(v * k)));
-    r = 'rgb(' + c(n >> 16) + ',' + c((n >> 8) & 255) + ',' + c(n & 255) + ')'; _sh.set(key, r); return r; }
-  // a limb / shaft with an ink outline
-  function inkSeg(a, b, col, w) { if (!a || !b) return; ctx.lineCap = 'round';
-    seg(a, b, INK, w + Math.max(1.4, w * 0.45)); seg(a, b, col, w); }
-  function inkPoly(pts, fill, lw) { if (!pts || pts.length < 3) return; for (const p of pts) if (!p) return;
-    ctx.lineJoin = 'round'; poly(pts, fill, INK, lw); }
-  // head seen from behind: dark hair with a cel highlight, white hachimaki knotted at the back with two sharp tails
-  function headSprite(v, band) {
-    return sprite('head' + v + band, 64, 72, g => {
-      g.lineJoin = 'round'; g.lineCap = 'round';
-      const o = (w) => { g.strokeStyle = INK; g.lineWidth = w; g.stroke(); };
-      g.beginPath(); g.moveTo(26, 50); g.lineTo(27, 64); g.lineTo(37, 64); g.lineTo(38, 50); g.closePath(); g.fillStyle = SKIN; g.fill(); o(3);   // neck
-      g.beginPath(); g.moveTo(27, 56); g.lineTo(37, 56); g.lineTo(37, 64); g.lineTo(27, 64); g.fillStyle = SKIN_D; g.fill();
-      [[13, 38], [51, 38]].forEach(([x, y]) => { g.beginPath(); g.arc(x, y, 4.6, 0, 6.3); g.fillStyle = SKIN; g.fill(); o(3); });                  // ears
-      if (v === 2) { g.beginPath(); g.moveTo(32, 44); g.quadraticCurveTo(42, 58, 34, 70); g.quadraticCurveTo(26, 60, 28, 46); g.closePath(); g.fillStyle = '#16162a'; g.fill(); o(3); } // ponytail
-      g.beginPath(); g.ellipse(32, 31, 19.5, 21, 0, 0, 6.3); g.fillStyle = '#16162a'; g.fill(); o(3.4);                                              // hair mass
-      g.beginPath(); g.ellipse(32, 31, 19.5, 21, 0, 0, 6.3); g.save(); g.clip();
-      g.fillStyle = '#0a0a14'; g.beginPath(); g.ellipse(40, 38, 20, 21, 0, 0, 6.3); g.fill();                                                          // hard shadow side
-      g.strokeStyle = '#4a4f8a'; g.lineWidth = 3; g.beginPath(); g.arc(30, 29, 14, 3.5, 4.7); g.stroke();                                              // rim highlight
-      g.restore();
-      if (v === 0) { g.strokeStyle = '#0a0a14'; g.lineWidth = 2.4; g.beginPath(); g.moveTo(32, 10); g.quadraticCurveTo(26, 20, 28, 28); g.stroke(); }
-      // hachimaki: a slim band round the head, knotted at the back, two long tails streaming sideways
-      g.beginPath(); g.moveTo(12.8, 31); g.quadraticCurveTo(32, 24, 51.2, 31); g.lineTo(51.4, 37.5); g.quadraticCurveTo(32, 30.5, 12.6, 37.5); g.closePath();
-      g.fillStyle = '#fff'; g.fill(); o(2.8);
-      g.beginPath(); g.moveTo(32, 34); g.quadraticCurveTo(48, 36, 62, 50); g.lineTo(55, 52); g.lineTo(60, 60); g.quadraticCurveTo(44, 50, 31, 41); g.closePath(); g.fillStyle = '#fff'; g.fill(); o(2.4);
-      g.beginPath(); g.moveTo(32, 36); g.quadraticCurveTo(46, 42, 58, 66); g.lineTo(50, 63); g.lineTo(50, 70); g.quadraticCurveTo(38, 56, 30, 41); g.closePath(); g.fillStyle = band; g.fill(); o(2.4);
-      g.beginPath(); g.arc(32, 34, 3.8, 0, 6.3); g.fillStyle = '#fff'; g.fill(); o(2.4);
-    });
-  }
-  // upper body from behind: shirt with hard shadow, back crest, shoulders and the dark sash
-  function torso(hip, sh, color, crest, s) {
-    const wb = s * 0.16, wt = s * 0.25, hy = hip.y, sy = sh.y, mx = (hip.x + sh.x) / 2, my = (hip.y + sh.y) / 2;
-    // shorts / legs tucked under the sash
-    inkPoly([{ x: hip.x - wb, y: hy }, { x: hip.x + wb, y: hy }, { x: hip.x + wb * 0.9, y: hy + s * 0.2 }, { x: hip.x - wb * 0.9, y: hy + s * 0.2 }], '#1d2236', Math.max(1, s * 0.03));
-    // shirt body
-    const body = [{ x: hip.x - wb, y: hy }, { x: sh.x - wt, y: sy + s * 0.05 }, { x: sh.x - wt * 0.55, y: sy - s * 0.04 }, { x: sh.x + wt * 0.55, y: sy - s * 0.04 }, { x: sh.x + wt, y: sy + s * 0.05 }, { x: hip.x + wb, y: hy }];
-    inkPoly(body, color, Math.max(1.2, s * 0.04));
-    ctx.fillStyle = shade(color, 0.76); ctx.beginPath();                                   // cel shadow on the right half
-    ctx.moveTo(mx + s * 0.07, sy - s * 0.04); ctx.lineTo(sh.x + wt * 0.55, sy - s * 0.04); ctx.lineTo(sh.x + wt, sy + s * 0.05); ctx.lineTo(hip.x + wb, hy); ctx.lineTo(hip.x + s * 0.07, hy); ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = shade(color, 1.35); ctx.lineWidth = Math.max(0.8, s * 0.03); ctx.beginPath();   // rim light on the left
-    ctx.moveTo(sh.x - wt * 0.8, sy + s * 0.04); ctx.lineTo(hip.x - wb * 0.85, hy - s * 0.04); ctx.stroke();
-    // sash
-    inkPoly([{ x: hip.x - wb, y: hy - s * 0.1 }, { x: hip.x + wb, y: hy - s * 0.1 }, { x: hip.x + wb, y: hy + s * 0.02 }, { x: hip.x - wb, y: hy + s * 0.02 }], '#f4f4f8', Math.max(1, s * 0.03));
-    // back crest (white disc with a bold team-colour mark)
-    if (s > 16) { const cx = mx, cy = my + s * 0.02, r = s * 0.085;
-      ctx.beginPath(); ctx.arc(cx, cy, r, 0, 6.3); ctx.fillStyle = '#fff'; ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = Math.max(1, s * 0.03); ctx.stroke();
-      ctx.beginPath(); ctx.arc(cx, cy, r * 0.55, 0, 6.3); ctx.fillStyle = crest; ctx.fill(); }
-    // collar line
-    ctx.strokeStyle = INK; ctx.lineWidth = Math.max(0.8, s * 0.03); ctx.beginPath(); ctx.moveTo(sh.x - wt * 0.5, sy - s * 0.02); ctx.lineTo(sh.x, sy + s * 0.06); ctx.lineTo(sh.x + wt * 0.5, sy - s * 0.02); ctx.stroke();
-  }
   // local frame of any object with centre (px,py) and heading hd: lx = right, lz = forward from the stern/back
   function LF(o, len) { const f = fwd(o.hd), r = rgt(o.hd); return (lx, ly, lz) => PW(o.px + r[0] * lx + f[0] * (lz - len / 2), o.py + r[1] * lx + f[1] * (lz - len / 2), ly); }
 
@@ -395,9 +340,178 @@ const Scene = (() => {
       for (let j = 0; j < 3; j++) { const zf = 1 + j * 2; seg(B(0, 0.9, zf), B(0, 4, zf), '#666', 1);
         poly([B(0, 4, zf), B(0, 4, zf + 1.2), B(0, 3, zf + 1.2), B(0, 3, zf)], cols[(k + j) % 5]); } } }
 
-  /* ---------------- peiron boats ---------------- */
+  /* ================= peiron boats & crew =================
+     Each crew member is a posed 3D body (hips, leaning spine, shoulders, 2-bone arms, legs, head)
+     in the boat's local frame (x right, y up, z forward from the stern). It is projected and drawn
+     as a rounded silhouette with an ink outline and hard cel shading, so it reads correctly from
+     behind, side-on at the turn, and face-on when the leaders come back toward you. */
+  const INK = '#12121e', SKIN = '#f3bf92', SKIN_S = '#c98a64', HAIR = '#1c1c33', HAIR_HI = '#5660a8', NAVY = '#232846',
+    WOOD = '#dba465', WOOD_S = '#a26a37', WOOD_D = '#5e3a1c', WOOD_IN = '#8a5a2e', BLADE = '#efc583';
+  const _cc = new Map();
+  function mix(a, b, k) { const key = a + b + k; let r = _cc.get(key); if (r) return r;
+    const A = parseInt(a.slice(1), 16), Bc = parseInt(b.slice(1), 16), m = s => Math.round(((A >> s) & 255) * (1 - k) + ((Bc >> s) & 255) * k);
+    r = 'rgb(' + m(16) + ',' + m(8) + ',' + m(0) + ')'; _cc.set(key, r); return r; }
+  const shadeOf = c => mix(c, '#1a1c48', 0.4);
+  const vA = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]], vS = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]],
+    vM = (a, k) => [a[0] * k, a[1] * k, a[2] * k], vD = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2],
+    vN = a => vM(a, 1 / (Math.hypot(a[0], a[1], a[2]) || 1)), vX = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]],
+    vLerp = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+  function hull2(p) {     // convex hull of screen points (monotone chain)
+    p = p.filter(Boolean).sort((a, b) => a.x - b.x || a.y - b.y); if (p.length < 3) return p;
+    const cr = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x), lo = [], up = [];
+    for (const q of p) { while (lo.length > 1 && cr(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop(); lo.push(q); }
+    for (let i = p.length - 1; i >= 0; i--) { const q = p[i]; while (up.length > 1 && cr(up[up.length - 2], up[up.length - 1], q) <= 0) up.pop(); up.push(q); }
+    lo.pop(); up.pop(); return lo.concat(up);
+  }
+  function path(pts) { ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y); ctx.closePath(); }
+  function inkFill(pts, fill, lw) { if (!pts || pts.length < 3) return; for (const p of pts) if (!p) return;
+    path(pts); ctx.fillStyle = fill; ctx.fill(); ctx.lineJoin = 'round'; ctx.strokeStyle = INK; ctx.lineWidth = lw; ctx.stroke(); }
+  function limb(a, b, col, w) { if (!a || !b) return; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+    ctx.strokeStyle = INK; ctx.lineWidth = w + Math.max(1.6, w * 0.38); ctx.stroke(); ctx.strokeStyle = col; ctx.lineWidth = w; ctx.stroke(); }
+  function polyline(pts, col, w, ink) { pts = pts.filter(Boolean); if (pts.length < 2) return; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); for (const p of pts) ctx.lineTo(p.x, p.y);
+    if (ink) { ctx.strokeStyle = INK; ctx.lineWidth = w + Math.max(1.6, w * 0.45); ctx.stroke(); } ctx.strokeStyle = col; ctx.lineWidth = w; ctx.stroke(); }
+  // visible runs of a sampled ring (null = facing away) drawn as an inked band
+  function ringArc(pts, col, w) { const n = pts.length, st = pts.findIndex(p => !p); if (st < 0) return; let cur = [];
+    for (let k = 1; k <= n; k++) { const p = pts[(st + k) % n]; if (p) cur.push(p); else { if (cur.length > 1) polyline(cur, col, w, true); cur = []; } } }
+  const fontsOK = () => (document.fonts && document.fonts.status === 'loaded') ? 1 : 0;
+  function crestSprite(kanji, col) {
+    return sprite('cr' + kanji + col + fontsOK(), 44, 44, g => { g.beginPath(); g.arc(22, 22, 19.5, 0, 6.283); g.fillStyle = '#fff'; g.fill(); g.lineWidth = 3.5; g.strokeStyle = INK; g.stroke();
+      g.beginPath(); g.arc(22, 22, 15, 0, 6.283); g.lineWidth = 1.6; g.strokeStyle = col; g.stroke();
+      g.font = '900 22px "M PLUS Rounded 1c",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = col; g.fillText(kanji, 22, 24); });
+  }
+  function splashStar(p, r, seed) { if (!p || r < 1.5) return; ctx.beginPath(); const n = 7;
+    for (let i = 0; i <= n * 2; i++) { const a = Math.PI + i / (n * 2) * Math.PI, rr = i % 2 ? r * (0.4 + 0.2 * hash(seed, i)) : r * (0.75 + 0.5 * hash(seed + 3, i));
+      ctx.lineTo(p.x + Math.cos(a) * rr * 1.25, p.y + Math.sin(a) * rr); }
+    ctx.closePath(); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineJoin = 'round'; ctx.strokeStyle = '#0f2f5a'; ctx.lineWidth = Math.max(1, r * 0.1); ctx.stroke(); }
+
+  // per-boat view context: projection, camera position and a viewer-relative key light in boat space
+  function boatCtx(b, B) {
+    const f = fwd(b.hd), r = rgt(b.hd), ox = b.px - f[0] * L / 2, oy = b.py - f[1] * L / 2;
+    const toL = (wx, wy, wz) => [wx * r[0] + wy * r[1], wz, wx * f[0] + wy * f[1]];
+    const c = toL(cam.x - ox, cam.y - oy, CAMH);
+    const lw = [-0.6 * cam.rx - 0.4 * cam.fx, -0.6 * cam.ry - 0.4 * cam.fy, 0.7];   // from the viewer's upper left
+    return { B, Bv: v => B(v[0], v[1], v[2]), cam: c, lt: vN(toL(lw[0], lw[1], lw[2])) };
+  }
+  // 2-bone arm: shoulder -> elbow -> hand, elbow pushed outward and down
+  function ik(sh, hand, side, rt, fw) {
+    const a = 0.3, c = 0.29; let d = vS(hand, sh), l = Math.hypot(d[0], d[1], d[2]) || 1e-3;
+    if (l > a + c - 0.005) { hand = vA(sh, vM(d, (a + c - 0.005) / l)); d = vS(hand, sh); l = a + c - 0.005; }
+    const dn = vM(d, 1 / l), bias = vA(vA(vM(rt, side), [0, -0.9, 0]), vM(fw, -0.25)), pp = vN(vS(bias, vM(dn, vD(bias, dn))));
+    const x = (a * a - c * c + l * l) / (2 * l), h = Math.sqrt(Math.max(0, a * a - x * x));
+    return { sh, el: vA(vA(sh, vM(dn, x)), vM(pp, h)), hand };
+  }
+  // paddle / oar from top (u=0) to tip (u=1); draws the part between u0 and u1 that is above the water
+  function shaft(K, top, tip, u0, u1, o) {
+    const Bv = K.Bv, at = u => vLerp(top, tip, u), ub = o.ub || 0.6, uw = tip[1] < 0 ? top[1] / (top[1] - tip[1]) : 1.001;
+    const e = Math.min(u1, uw); if (e > u0) {
+      const p0 = Bv(at(u0)); if (!p0) return; const s = p0.s;
+      if (u0 < ub) { if (s > 26 * DET) limb(p0, Bv(at(Math.min(e, ub))), WOOD, s * (o.w || 0.05)); else { ctx.lineCap = 'round'; seg(p0, Bv(at(Math.min(e, ub))), WOOD_S, s * 0.06); } if (u0 === 0 && o.grip && s > 40) limb(Bv(vA(top, [-0.07, 0, 0])), Bv(vA(top, [0.07, 0, 0])), WOOD_S, s * 0.05); }
+      if (e > ub) { const ua = Math.max(u0, ub), hw = u => (o.bw || 0.08) * (1 - 0.25 * (u - ub) / (1 - ub)), X = o.bx || [1, 0, 0];
+        const q = [Bv(vA(at(ua), vM(X, -hw(ua)))), Bv(vA(at(e), vM(X, -hw(e)))), Bv(vA(at(e), vM(X, hw(e)))), Bv(vA(at(ua), vM(X, hw(ua))))];
+        if (e >= 1) q.splice(2, 0, Bv(vA(tip, vM(vN(vS(tip, top)), 0.05))));
+        inkFill(q, o.blade || BLADE, Math.max(1.2, s * 0.028)); }
+    }
+    if (u1 >= uw && uw < 1 && o.splash !== undefined) {           // where it enters the water
+      const w = Bv(at(uw)); if (!w) return; const s = w.s;
+      ctx.globalAlpha = 0.85; ctx.beginPath(); ctx.ellipse(w.x, w.y, s * 0.2, s * 0.06, 0, 0, 6.283); ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1, s * 0.04); ctx.stroke(); ctx.globalAlpha = 1;
+      if (o.splash > 0) splashStar(w, s * 0.32 * o.splash, o.seed || 1);
+    }
+  }
+
+  /* P: hip, yaw (0 = faces the bow), lean, twist, spine, shirt, crest, kanji, hair, hands [L,R], legs(side)->[knee,foot] | seated,
+        shout, spd, band, extra: [[localPoint, fn]] */
+  function figure(K, P, parts) {
+    const Bv = K.Bv, yaw = P.yaw || 0, cy = Math.cos(yaw), sy = Math.sin(yaw), fw0 = [sy, 0, cy], rt = [cy, 0, -sy];
+    const ln = P.lean || 0, up = vA([0, Math.cos(ln), 0], vM(fw0, Math.sin(ln))), fw = vX(rt, up);
+    const H = P.hip, sp = P.spine || 0.55, tw = P.twist || 0, hp = Bv(H); if (!hp) return; const s = hp.s, hi = s > 26 * DET;
+    const C1 = vA(H, vM(up, 0.03)), C2 = vA(H, vM(up, sp * 0.58)), C3 = vA(H, vM(up, sp)), C4 = vA(H, vM(up, sp + 0.05));
+    const hc = vA(C4, [fw0[0] * 0.03, 0.15, fw0[2] * 0.03]), shirt = P.shirt, shirtS = shadeOf(shirt);
+    (P.extra || []).forEach(([p, fn]) => { const q = Bv(p); if (q) parts.push([q.z, fn]); });
+    if (s < 11 * DET) {                                                          // far away: quick silhouette
+      parts.push([hp.z, () => { const t3 = Bv(C3), h = Bv(hc); limb(hp, t3, shirt, s * 0.34); if (h) { dot(h, s * 0.15, HAIR); seg({ x: h.x - s * 0.15, y: h.y - s * 0.03 }, { x: h.x + s * 0.15, y: h.y - s * 0.03 }, '#fff', s * 0.07); } }]);
+      return;
+    }
+    const n = s > 45 * DET ? 10 : s > 20 * DET ? 7 : 6, ring = (c, rx, rz) => { const o = []; for (let i = 0; i < n; i++) { const a = i / n * 6.283, ca = Math.cos(a), sa = Math.sin(a);
+      const p = vA(c, vA(vM(rt, rx * ca), vM(fw, rz * sa))); o.push([p, vA(vM(rt, ca / rx), vM(fw, sa / rz)), Bv(p)]); } return o; };
+    const R1 = ring(C1, 0.15, 0.11), R2 = ring(C2, 0.205, 0.13), R3 = ring(C3, 0.2, 0.105), R4 = ring(C4, 0.11, 0.07);
+    const seen = q => q[2] && vD(q[1], vS(K.cam, q[0])) > 0;
+    const torso = () => {
+      const all = R1.concat(R2, R3, R4), hp2 = hull2(all.map(q => q[2])); if (hp2.length < 3) return;
+      path(hp2); ctx.fillStyle = shirt; ctx.fill();
+      const dark = []; for (const q of all) if (seen(q) && vD(vN(q[1]), K.lt) < 0.12) dark.push(q[2]);
+            if (dark.length > 2) { path(hull2(dark)); ctx.fillStyle = shirtS; ctx.fill(); }
+      // back crest, or the happi's white lapels from the front
+      const pb = vA(C2, vM(fw, -0.13)), vb = vD(vN(vS(K.cam, pb)), vM(fw, -1));
+      if (vb > 0.25 && P.kanji) { const c = Bv(pb); if (c) { const r = s * 0.105 * (0.55 + 0.45 * vb); if (r > 3.5) ctx.drawImage(crestSprite(P.kanji, P.crest), c.x - r, c.y - r, r * 2, r * 2); else dot(c, r, '#fff'); } }
+      if (vb < -0.2) { const a = Bv(vA(C3, vA(vM(fw, 0.1), vM(rt, -0.07)))), m = Bv(vA(C1, vM(fw, 0.12))), a2 = Bv(vA(C3, vA(vM(fw, 0.1), vM(rt, 0.07))));
+        if (a && m && a2) { ctx.lineCap = 'round'; seg(a, m, '#fff', s * 0.05); seg(a2, m, '#fff', s * 0.05); } }
+      if (hi) ringArc(R1.map(q => seen(q) ? q[2] : null), '#f4f4f8', s * 0.075);   // white sash
+      path(hp2); ctx.lineJoin = 'round'; ctx.strokeStyle = INK; ctx.lineWidth = Math.max(1.3, s * 0.036); ctx.stroke();
+    };
+    const tz = Bv(C2); parts.push([tz ? tz.z : hp.z, torso]);
+    // legs (standing) or thighs (seated)
+    [-1, 1].forEach(side => {
+      const hj = vA(H, vM(rt, side * 0.09));
+      if (P.legs) { const [kn, ft] = P.legs(side), a = Bv(hj), b = Bv(kn), c = Bv(ft); if (!b) return;
+        parts.push([b.z + 0.05, () => { limb(b, c, NAVY, s * 0.11); limb(a, b, NAVY, s * 0.13); if (c) { ctx.beginPath(); ctx.ellipse(c.x, c.y, s * 0.08, s * 0.04, 0, 0, 6.283); ctx.fillStyle = INK; ctx.fill(); } }]); }
+      else if (s > 1e9) { const kn = vA(vA(hj, vM(fw0, 0.4)), [0, 0.07, 0]), a = Bv(hj), b = Bv(kn); if (b) parts.push([b.z + 0.05, () => limb(a, b, NAVY, s * 0.14)]); }
+    });
+    // arms
+    const hands = P.hands || [], sl = [vA(vA(C3, vM(rt, -0.19)), vM(fw, -tw)), vA(vA(C3, vM(rt, 0.19)), vM(fw, tw))];
+    [-1, 1].forEach((side, i) => {
+      const A = ik(sl[i], hands[i] || vA(vA(sl[i], [0, -0.52, 0]), vM(fw0, 0.05)), side, rt, fw0), p0 = Bv(A.sh), p1 = Bv(A.el), p2 = Bv(A.hand); if (!p0 || !p1 || !p2) return;
+      const far = tz && p0.z > tz.z, sk = far ? SKIN_S : SKIN, sv = far ? shirtS : shirt;
+      parts.push([p1.z, () => { polyline([p0, p1, p2], sk, s * 0.08, hi); const m = { x: p0.x + (p1.x - p0.x) * 0.5, y: p0.y + (p1.y - p0.y) * 0.5 };
+        if (hi) limb(p0, m, sv, s * 0.13); else { ctx.lineCap = 'round'; seg(p0, m, sv, s * 0.13); } }]);
+    });
+    // head
+    const head = () => {
+      const c = Bv(hc); if (!c) return; const R = c.s * 0.125, tc = vN(vS(K.cam, hc)), fv = vD(fw0, tc), lw = Math.max(1.2, R * 0.13);
+      const knot = vA(hc, [-fw0[0] * 0.13, 0.035, -fw0[2] * 0.13]), kp = Bv(knot), knotFront = kp && kp.z < c.z;
+      const tails = () => { if (!kp || R < 4.5 * DET) return; const sp2 = 1 + Math.min(1.2, (P.spd || 0) / 10);
+        [-1, 1].forEach(k => { const pts = []; for (let i = 0; i <= 4; i++) pts.push(Bv(vA(knot, [
+          -fw0[0] * 0.035 * i * sp2 + rt[0] * (k * 0.025 * i + Math.sin(S.time * 13 + i * 1.3 + k) * 0.012 * i), -0.035 * i / sp2,
+          -fw0[2] * 0.035 * i * sp2 + rt[2] * (k * 0.025 * i + Math.sin(S.time * 13 + i * 1.3 + k) * 0.012 * i)])));
+          polyline(pts, k > 0 ? (P.band || '#fff') : '#fff', R * 0.26, R > 9); }); };
+      if (!knotFront) tails();
+      if (P.hair === 2) { const bn = Bv(vA(hc, [-fw0[0] * 0.12, 0.05, -fw0[2] * 0.12])); if (bn && bn.z > c.z) { dot(bn, R * 0.42, INK); dot(bn, R * 0.32, HAIR); } }
+      ctx.beginPath(); ctx.arc(c.x, c.y, R, 0, 6.283); ctx.fillStyle = HAIR; ctx.fill();
+      const big = R > 6 * DET; if (big) { ctx.save(); ctx.beginPath(); ctx.arc(c.x, c.y, R, 0, 6.283); ctx.clip(); }
+      else if (fv > 0.35) dot({ x: c.x, y: c.y + R * 0.2 }, R * 0.72, SKIN);
+      if (big && fv > -0.2) { const pf = Bv(vA(hc, vM(fw0, 0.125))), o = pf ? { x: pf.x - c.x, y: pf.y - c.y } : { x: 0, y: 0 }, k = (fv + 0.2) / 1.2;
+        ctx.beginPath(); ctx.ellipse(c.x + o.x * 0.45, c.y + o.y * 0.45 + R * 0.24, R * (0.22 + 0.58 * k), R * 0.8, Math.atan2(o.y, o.x), 0, 6.283); ctx.fillStyle = SKIN; ctx.fill();
+        if (fv > 0.2) { ctx.fillStyle = HAIR; ctx.beginPath(); for (let i = 0; i < 5; i++) { const x0 = c.x + o.x * 0.45 + (i - 2) * R * 0.36; ctx.moveTo(x0 - R * 0.2, c.y - R * 0.3); ctx.lineTo(x0 + R * 0.05, c.y - R * 0.04 + (i % 2) * R * 0.08); ctx.lineTo(x0 + R * 0.2, c.y - R * 0.3); } ctx.fill(); } }
+      if (big) { ctx.strokeStyle = HAIR_HI; ctx.lineWidth = R * 0.16; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(c.x, c.y, R * 0.72, 3.5, 4.4); ctx.stroke();
+      ctx.beginPath(); ctx.arc(c.x, c.y, R * 1.2, 0, 6.283); ctx.arc(c.x - R * 0.4, c.y - R * 0.45, R * 1.05, 0, 6.283); ctx.fillStyle = 'rgba(16,14,60,0.32)'; ctx.fill('evenodd');
+      ctx.restore(); }
+      if (P.hair === 1) { ctx.beginPath(); for (let i = 0; i < 4; i++) { const a = -2.4 + i * 0.5, a2 = a + 0.28; ctx.moveTo(c.x + Math.cos(a) * R * 0.92, c.y + Math.sin(a) * R * 0.92);
+        ctx.lineTo(c.x + Math.cos(a + 0.05) * R * 1.45, c.y + Math.sin(a + 0.05) * R * 1.45); ctx.lineTo(c.x + Math.cos(a2) * R * 0.92, c.y + Math.sin(a2) * R * 0.92); }
+        ctx.fillStyle = HAIR; ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = lw * 0.8; ctx.lineJoin = 'round'; ctx.stroke(); }
+      [-1, 1].forEach(k => { if (vD(vM(rt, k), tc) > 0.2) { const e = Bv(vA(hc, vA(vM(rt, k * 0.125), [0, -0.01, 0]))); if (e) { ctx.beginPath(); ctx.arc(e.x, e.y, R * 0.2, 0, 6.283); ctx.fillStyle = SKIN; ctx.fill(); ctx.lineWidth = lw * 0.8; ctx.strokeStyle = INK; ctx.stroke(); } } });
+      ctx.beginPath(); ctx.arc(c.x, c.y, R, 0, 6.283); ctx.strokeStyle = INK; ctx.lineWidth = lw; ctx.stroke();
+      // hachimaki round the head, knotted at the back
+      const nb = R > 6 ? 14 : 8, band = []; for (let i = 0; i < nb; i++) { const a = i / nb * 6.283, d = vA(vM(rt, Math.cos(a)), vM(fw0, Math.sin(a))); band.push(vD(d, tc) > 0 ? Bv(vA(hc, vA(vM(d, 0.13), [0, 0.04, 0]))) : null); }
+      ringArc(band, '#fff', R * 0.3);
+      if (knotFront) { tails(); if (R > 5) dot(kp, R * 0.2, '#fff'); }
+      if (P.hair === 2) { const bn = Bv(vA(hc, [-fw0[0] * 0.12, 0.05, -fw0[2] * 0.12])); if (bn && bn.z <= c.z) { dot(bn, R * 0.42, INK); dot(bn, R * 0.32, HAIR); } }
+      if (fv > 0.3 && R > 4.5) {                         // face: determined eyes, fierce brows, shouting mouth
+        const ey = [-1, 1].map(k => Bv(vA(hc, vA(vM(fw0, 0.11), vA(vM(rt, k * 0.046), [0, -0.014, 0])))));
+        const mo = Bv(vA(hc, vA(vM(fw0, 0.108), [0, -0.064, 0])));
+        ctx.fillStyle = INK; ey.forEach(p => { if (p) { ctx.beginPath(); ctx.ellipse(p.x, p.y, R * 0.085, R * 0.15, 0, 0, 6.283); ctx.fill(); } });
+        if (ey[0] && ey[1]) { const mx = (ey[0].x + ey[1].x) / 2; ctx.strokeStyle = INK; ctx.lineCap = 'round'; ctx.lineWidth = Math.max(1, R * 0.11);
+          ey.forEach(p => { const d = p.x < mx ? 1 : -1; ctx.beginPath(); ctx.moveTo(p.x - d * R * 0.17, p.y - R * 0.32); ctx.lineTo(p.x + d * R * 0.11, p.y - R * 0.2); ctx.stroke(); }); }
+        if (mo) { ctx.strokeStyle = INK; ctx.lineWidth = Math.max(1, R * 0.08);
+          if (P.shout) { ctx.beginPath(); ctx.moveTo(mo.x - R * 0.17, mo.y - R * 0.05); ctx.lineTo(mo.x + R * 0.17, mo.y - R * 0.05); ctx.lineTo(mo.x, mo.y + R * 0.17); ctx.closePath(); ctx.fillStyle = '#6a1424'; ctx.fill(); ctx.stroke(); }
+          else { ctx.beginPath(); ctx.moveTo(mo.x - R * 0.12, mo.y); ctx.lineTo(mo.x + R * 0.12, mo.y - R * 0.03); ctx.stroke(); } }
+      }
+    };
+    const hz = Bv(hc); parts.push([(hz ? hz.z : hp.z) - 0.12, head]);
+  }
+
+  /* ---------------- the boat ---------------- */
   // 13.6 m cedar hull, bow-shaped (弓形): rises at both bow and stern
-  const hullW = t => { let w = 0.66; if (t < 0.08) w *= 0.6 + t / 0.08 * 0.4; if (t > 0.78) w *= Math.max(0.05, (1 - t) / 0.22); return w; };
+  const hullW = t => { let w = 0.66; if (t < 0.12) w *= 0.12 + 0.88 * Math.pow(t / 0.12, 0.55); if (t > 0.78) w *= Math.max(0.05, (1 - t) / 0.22); return w; };
   const hullH = t => 0.5 + 0.55 * Math.pow(Math.abs(t - 0.45) / 0.55, 2.2);
   function wake(b, B) {
     const k = Math.min(1, b.v / 12) * 0.5 + 0.12; ctx.globalAlpha = k; ctx.strokeStyle = '#fff'; ctx.lineCap = 'round';
@@ -405,85 +519,113 @@ const Scene = (() => {
       seg(B(sd * 0.15, 0, L * 0.99), B(sd * 0.75, 0, L * 0.82), '#fff', 2); }
     ctx.globalAlpha = 1;
   }
-  function drawHead(hd, s, v, band) {
-    const dw = s * 0.72, dh = dw * 72 / 64, hs = headSprite(v, band);
-    ctx.drawImage(hs, hd.x - dw / 2, hd.y - dh * 0.44, dw, dh);
+  function rower(K, b, t, sd, ph, bob, parts, low, idx) {
+    const z = t * L, gH = hullH(t), hw = hullW(t), seat = gH - 0.13 + bob, lf = Math.cos(ph), sn = Math.sin(ph);
+    const x = sd * Math.min(0.3, hw * 0.5), plen = 1.25 + Math.abs(t - 0.45) * 0.7, dip = Math.max(-1, Math.min(1, sn * 2.6));
+    const tip = [sd * (hw + 0.26), dip > 0 ? -0.3 * dip : 0.1 + 0.3 * -dip, z + 0.1 + 0.72 * lf];
+    const dir = vN(vS([sd * 0.1, seat + 1.05 + 0.06 * lf, z + 0.05 + 0.42 * lf], tip)), top = vA(tip, vM(dir, plen));
+    const lowH = vA(tip, vM(dir, plen * 0.52)), hands = sd > 0 ? [top, lowH] : [lowH, top];
+    const ug = top[1] > gH && tip[1] < gH ? (top[1] - gH) / (top[1] - tip[1]) : (tip[1] >= gH ? 1 : 0);
+    const spl = sn > 0 && lf > 0.3 ? Math.min(1, (1 - sn) * 1.6) * (0.5 + Math.min(0.5, b.v / 20)) : 0, seed = idx * 7 + sd;
+    figure(K, { hip: [x, seat, z], lean: 0.16 + 0.34 * (lf * 0.5 + 0.5), twist: 0.08 * lf * sd, spine: 0.54, shirt: b.color, crest: b.dark, kanji: b.kanji,
+      hair: (idx * 2 + (sd > 0 ? 1 : 0)) % 3, hands, shout: lf > 0.5 && sn > -0.2, spd: b.v, band: b.color,
+      extra: [[vLerp(top, tip, ug * 0.5), () => shaft(K, top, tip, 0, ug, { grip: 1 })]] }, parts);
+    low[sd].push(() => shaft(K, top, tip, ug, 1, { splash: spl, seed }));
   }
-  function paddler(b, B, t, sd, ph, bob) {
-    const z = t * L, h0 = hullH(t) - 0.2 + bob, lean = Math.cos(ph), sn = Math.sin(ph);
-    const hip = B(sd * 0.32, h0, z); if (!hip) return; const s = hip.s;
-    const sh = B(sd * 0.3, h0 + 0.68, z + 0.18 + lean * 0.22), hd = B(sd * 0.3, h0 + 0.98, z + 0.24 + lean * 0.28);
-    // short ~1 m paddle (櫂): longer near bow/stern where the hull is higher
-    const plen = 1.0 + Math.abs(t - 0.45) * 0.7, inWater = sn > 0;
-    const grip = B(sd * 0.36, h0 + 0.95, z + lean * 0.45), tipY = inWater ? -0.18 : 0.15 + 0.35 * (-sn);
-    const tip = B(sd * (0.78 + plen * 0.12), tipY, z + lean * 0.75 + 0.1), bl = B(sd * (0.72 + plen * 0.1), tipY + 0.32, z + lean * 0.72 + 0.1);
-    const hand = B(sd * 0.55, h0 + 0.5, z + lean * 0.6);
-    if (s < 9) { ctx.lineCap = 'round'; seg(grip, tip, '#d9b47a', s * 0.1); seg(hip, sh, b.color, s * 0.4); if (hd) dot(hd, s * 0.17, '#1a1a2a'); return; }
-    inkSeg(grip, bl, '#c99a5a', s * 0.07); inkSeg(bl, tip, '#ecc684', s * 0.19);                    // paddle: shaft + broad blade
-    if (grip) dot(grip, s * 0.06, INK);
-    if (!sh) return;
-    torso(hip, sh, b.color, b.dark, s);
-    // arms: outboard hand low on the shaft, inboard hand on the grip
-    const out = { x: sh.x + sd * s * 0.27, y: sh.y + s * 0.05 }, inn = { x: sh.x - sd * s * 0.27, y: sh.y + s * 0.05 };
-    const sleeve = (p, q) => { const m = { x: p.x + (q.x - p.x) * 0.38, y: p.y + (q.y - p.y) * 0.38 }; inkSeg(p, q, SKIN, s * 0.11); inkSeg(p, m, b.color, s * 0.16); };
-    sleeve(inn, grip); sleeve(out, hand); dot(grip, s * 0.06, SKIN); dot(hand, s * 0.06, SKIN);
-    if (hd) drawHead(hd, s, (Math.round(t * 97) + (sd > 0 ? 1 : 0)) % 3, b.color);
-  }
-  function standing(B, x, t, bob, shirt, band, arm) {    // a standing crew member; arm(h0,z) draws their tool
-    const z = t * L, h0 = hullH(t) - 0.15 + bob, hip = B(x, h0 + 0.45, z); if (!hip) return; const s = hip.s;
-    const sh = B(x, h0 + 1.25, z), hd = B(x, h0 + 1.55, z); if (!sh) return;
-    torso(hip, sh, shirt, band, s); if (arm) arm(sh, h0, z, s);
-    if (hd) drawHead(hd, s * 1.05, (Math.round(t * 53) + 1) % 3, band);
+  function stander(K, b, x, t, bob, o, parts) {
+    const z = t * L, deck = hullH(t) - 0.33 + bob + (o.raise || 0), yaw = o.yaw || 0, cy = Math.cos(yaw), sy = Math.sin(yaw), hipH = o.crouch === true ? 0.42 : o.crouch ? 0.62 : 0.82;
+    const legs = side => { const rx = cy * side * 0.12, rz = -sy * side * 0.12, kf = o.crouch ? 0.32 : 0.08;
+      return [[x + rx + sy * kf, deck + (o.crouch ? 0.34 : 0.47), z + rz + cy * kf], [x + rx * 1.25, deck + 0.03, z + rz * 1.25]]; };
+    figure(K, Object.assign({ hip: [x, deck + hipH, z], spine: 0.58, legs, band: b.color, crest: b.dark, kanji: b.kanji, spd: b.v }, o), parts);
+    return deck;
   }
   function boat(b) {
     const B0 = LF({ px: b.px, py: b.py, hd: b.hd }, L), bob = Math.sin(S.time * 1.7 + b.lane * 1.3) * 0.04;
-    const B = (x, y, z) => B0(x, y + (y > 0.01 ? bob : 0), z);
-    const N = 20, GL = [], GR = [], WLp = [], WRp = [], IL = [], IR = [];
+    const B = (x, y, z) => B0(x, y + (y > 0.01 ? bob : 0), z), K = boatCtx(b, B), Bv = K.Bv;
+    const near = K.cam[0] >= 0 ? 1 : -1, behind = K.cam[2] < L * 0.5;
+    const N = 22, G = { '-1': [], 1: [] }, W = { '-1': [], 1: [] }, I = { '-1': [], 1: [] }, Bd = { '-1': [], 1: [] }, Pn = { '-1': [], 1: [] };
     for (let i = 0; i <= N; i++) { const t = i / N, z = t * L, w = hullW(t), h = hullH(t);
-      GL.push(B(-w, h, z)); GR.push(B(w, h, z)); WLp.push(B(-w * 0.8, 0, z)); WRp.push(B(w * 0.8, 0, z)); IL.push(B(-w * 0.55, h - 0.08, z)); IR.push(B(w * 0.55, h - 0.08, z)); }
-    const ok = a => a.filter(Boolean);
+      for (const sd of [-1, 1]) { G[sd].push(B(sd * w, h, z)); W[sd].push(B(sd * w * 0.8, 0, z)); I[sd].push(B(sd * w * 0.82, h - 0.06, z)); Bd[sd].push(B(sd * w * 0.985, h - 0.17, z)); Pn[sd].push(B(sd * w * 0.97, h - 0.22, z)); } }
+    const ok = a => a.filter(Boolean), mid = B(0, 0.5, L / 2), lw = Math.max(1.4, (mid ? mid.s : 20) * 0.04);
     wake(b, B);
-    const wood = '#c9965a', woodD = '#9c6c38';
-    inkPoly(ok([...GL, ...WLp.slice().reverse()]), woodD, 2); inkPoly(ok([...GR, ...WRp.slice().reverse()]), woodD, 2);
-    poly(ok([GL[0], GR[0], WRp[0], WLp[0]]), wood, 'rgba(0,0,0,.2)', 1);
-    inkPoly(ok([...GL, ...GR.slice().reverse()]), '#5a3818', 2.5); poly(ok([...IL, ...IR.slice().reverse()]), '#a8753f');
-    ctx.lineCap = 'round';
-    for (let i = 1; i <= N; i++) { if (GL[i - 1] && GL[i]) seg(GL[i - 1], GL[i], b.color, GL[i].s * 0.12); if (GR[i - 1] && GR[i]) seg(GR[i - 1], GR[i], b.color, GR[i].s * 0.12); }
-    // team crest painted on both sides of the bow
-    [-1, 1].forEach(sd => { const c = B(sd * hullW(0.9) * 0.95, hullH(0.9) * 0.55, 0.9 * L); if (c) { dot(c, c.s * 0.26, '#fff'); dot(c, c.s * 0.2, b.color); } });
-    const items = [];
-    // 13 pairs of paddlers = 26 (seats from bow to stern, gap amidships for the drum & gong)
+    // soft shadow on the water
+    const shp = []; for (let i = 0; i <= 12; i++) { const t = i / 12; shp.push(B(hullW(t) * 1.15, 0, t * L)); } for (let i = 12; i >= 0; i--) { const t = i / 12; shp.push(B(-hullW(t) * 1.15, 0, t * L)); }
+    ctx.globalAlpha = 0.28; poly(ok(shp), '#04203f'); ctx.globalAlpha = 1;
+    const plank = sd => {
+      const g = ok(G[sd]), w = ok(W[sd]); if (g.length < 2 || w.length < 2) return;
+      const lit = vD([sd, 0, 0], K.lt) > 0, s0 = mid ? mid.s : 20;
+      inkFill([...g, ...w.slice().reverse()], lit ? WOOD : WOOD_S, lw);
+      ctx.globalAlpha = 0.45; for (const k of [0.45, 0.72]) { const pts = []; for (let i = 0; i <= N; i++) { const t = i / N; pts.push(B(sd * hullW(t) * (1 - 0.18 * k), hullH(t) * (1 - k), t * L)); } polyline(pts, WOOD_D, Math.max(0.8, s0 * 0.02)); } ctx.globalAlpha = 1;
+      poly(ok([...g, ...ok(Bd[sd]).reverse()]), b.color);                                        // team band under the gunwale
+      polyline(ok(Bd[sd]), INK, Math.max(1, s0 * 0.022)); polyline(ok(Pn[sd]), '#fff', Math.max(0.8, s0 * 0.018));
+      polyline(g, INK, lw * 1.1);
+      const c = B(sd * hullW(0.88) * 1.0, hullH(0.88) * 0.55, 0.88 * L);                         // team mark painted on the bow
+      if (c && c.s > 6) { const r = c.s * 0.27; ctx.drawImage(crestSprite(b.kanji, b.dark), c.x - r, c.y - r, r * 2, r * 2); }
+      ctx.globalAlpha = 0.7; polyline(w, '#fff', Math.max(1, s0 * 0.045)); ctx.globalAlpha = 1;   // foam line at the waterline
+    };
+    const transom = () => inkFill([G[-1][0], G[1][0], W[1][0], W[-1][0]], WOOD_S, lw);
+    const low = { '-1': [], 1: [] }, parts = [];
+    // crew: 13 pairs of paddlers, a gap amidships for the drum and gong
     const seats = []; for (let i = 0; i < 13; i++) seats.push(0.88 - i * 0.056 - (i >= 6 ? 0.07 : 0));
-    seats.forEach(t => items.push([t, () => { paddler(b, B, t, -1, b.phase, bob); paddler(b, B, t, 1, b.phase, bob); }]));
-    const up = Math.sin(b.phase * 2) > 0;
-    // 太鼓 (drum) and its drummer
-    items.push([0.52, () => { const dc = B(0, hullH(0.53) + 0.45, 0.53 * L); if (dc) { const s = dc.s;
-      ctx.beginPath(); ctx.ellipse(dc.x, dc.y, s * 0.4, s * 0.34, 0, 0, 6.3); ctx.fillStyle = '#8b2a1d'; ctx.fill();
-      ctx.beginPath(); ctx.ellipse(dc.x, dc.y - s * 0.2, s * 0.38, s * 0.11, 0, 0, 6.3); ctx.fillStyle = '#ead6ae'; ctx.fill(); }
-      standing(B, -0.05, 0.5, bob, '#fff', b.color, (sh, h0, z) => { const hl = B(-0.3, h0 + (up ? 1.7 : 1.0), z + 0.4), hr = B(0.25, h0 + (up ? 1.0 : 1.7), z + 0.4); inkSeg(sh, hl, SKIN, sh.s * 0.12); inkSeg(sh, hr, SKIN, sh.s * 0.12); if (hl) inkSeg(hl, { x: hl.x - sh.s * 0.08, y: hl.y - sh.s * 0.3 }, '#f4e6c4', sh.s * 0.05); if (hr) inkSeg(hr, { x: hr.x + sh.s * 0.08, y: hr.y - sh.s * 0.3 }, '#f4e6c4', sh.s * 0.05); }); }]);
-    // ドラ (gong) and its player
-    items.push([0.47, () => { const g = B(0.35, hullH(0.47) + 1.0, 0.47 * L), f0 = B(0.35, hullH(0.47), 0.47 * L), f1 = B(0.35, hullH(0.47) + 1.5, 0.47 * L);
-      seg(f0, f1, '#5a3a1a', (f1 || { s: 1 }).s * 0.06); if (g) { dot(g, g.s * 0.28, '#c9962a'); dot(g, g.s * 0.19, '#e9c25a'); dot(g, g.s * 0.06, '#a57a1c'); }
-      standing(B, 0.0, 0.44, bob, '#fff', b.color, (sh, h0, z) => { const hh = B(0.3, h0 + (up ? 1.0 : 1.35), z + 0.2); inkSeg(sh, hh, SKIN, sh.s * 0.12); if (hh) inkSeg(hh, { x: hh.x + sh.s * 0.22, y: hh.y - sh.s * 0.12 }, '#8a6a3a', sh.s * 0.07); }); }]);
-    // 采振り: stands near the bow waving the 采配 to the beat
-    items.push([0.93, () => standing(B, 0, 0.93, bob, b.dark, '#fff', (sh, h0, z, s) => { const tip = B(Math.sin(b.phase) * 0.5, h0 + 2.2, z + 0.2);
-      inkSeg(sh, tip, SKIN, s * 0.12); if (tip) for (let k = 0; k < 5; k++) inkSeg(tip, { x: tip.x + (k - 2) * s * 0.08, y: tip.y + s * 0.38 }, '#fff', s * 0.05); })]);
+    seats.forEach((t, i) => { const ph = b.phase - (12 - i) * 0.035; rower(K, b, t, -1, ph, bob, parts, low, i); rower(K, b, t, 1, ph, bob, parts, low, i); });
+    const up = Math.sin(b.phase * 2) > 0, beat = Math.sin(b.phase * 2);
+    // 太鼓 on its stand, and the drummer behind it
+    const tD = 0.535, zD = tD * L, yD = hullH(tD) - 0.33 + 0.62 + bob;
+    parts.push([(Bv([0, yD, zD]) || { z: 0 }).z, () => {
+      const n = 10, r1 = [], r2 = [], top = []; for (let i = 0; i < n; i++) { const a = i / n * 6.283, ca = Math.cos(a), sa = Math.sin(a);
+        r1.push(B(ca * 0.27, yD + 0.2, zD + sa * 0.27)); r2.push(B(ca * 0.24, yD - 0.2, zD + sa * 0.24)); top.push(B(ca * 0.25, yD + 0.22, zD + sa * 0.25)); }
+      const s0 = (r1[0] || { s: 20 }).s; [-0.2, 0.2].forEach(x => limb(B(x, yD - 0.2, zD), B(x * 1.2, yD - 0.62, zD), WOOD_D, s0 * 0.05));
+      inkFill(hull2(r1.concat(r2)), '#8e2a1b', Math.max(1.2, s0 * 0.035)); polyline(ok(r2.slice(0, 6)), '#d8a12a', s0 * 0.03);
+      inkFill(ok(top), '#f1dfb6', Math.max(1, s0 * 0.03)); }]);
+    stander(K, b, 0, tD - 0.045, bob, { shirt: '#ffffff', crest: b.color, hair: 1, lean: 0.15, shout: up,
+      hands: [[-0.17, yD + (up ? 0.75 : 0.3), zD - 0.18], [0.17, yD + (up ? 0.3 : 0.75), zD - 0.18]],
+      extra: [[[0, yD + 0.5, zD - 0.15], () => { [-1, 1].forEach(k => { const hy = yD + ((k < 0) === up ? 0.75 : 0.3), a = B(k * 0.17, hy, zD - 0.18), c = B(k * 0.12, hy + ((k < 0) === up ? 0.28 : -0.12), zD + 0.05); limb(a, c, '#f2e2bd', (a || { s: 20 }).s * 0.035); }); }]] }, parts);
+    // ドラ on a frame, and its player
+    const tG = 0.455, zG = tG * L, dG = hullH(tG) - 0.33 + bob, gc = [0.3, dG + 1.1, zG], swing = Math.max(0, beat) * 0.1;
+    parts.push([(Bv(gc) || { z: 0 }).z, () => {
+      const s0 = (Bv(gc) || { s: 20 }).s; [0.02, 0.58].forEach(x => limb(B(x, dG, zG), B(x, dG + 1.42, zG), WOOD_D, s0 * 0.05)); limb(B(0.02, dG + 1.42, zG), B(0.58, dG + 1.42, zG), WOOD_D, s0 * 0.05);
+      const disc = (r) => { const o = []; for (let i = 0; i < 14; i++) { const a = i / 14 * 6.283; o.push(Bv([gc[0] + Math.cos(a) * r, gc[1] + Math.sin(a) * r, gc[2] + Math.sin(a) * swing])); } return ok(o); };
+      seg(B(0.2, dG + 1.42, zG), Bv([0.22, gc[1] + 0.25, zG]), INK, 1.2); seg(B(0.4, dG + 1.42, zG), Bv([0.38, gc[1] + 0.25, zG]), INK, 1.2);
+      inkFill(disc(0.26), '#d7a32e', Math.max(1.2, s0 * 0.035)); inkFill(disc(0.18), '#efc552', Math.max(0.8, s0 * 0.02)); inkFill(disc(0.07), '#b8841c', Math.max(0.8, s0 * 0.02)); }]);
+    stander(K, b, -0.08, tG - 0.04, bob, { shirt: '#ffffff', crest: b.color, hair: 0, lean: 0.1, yaw: 0.35,
+      hands: [[0.12, dG + 1.15 + (up ? 0.2 : 0), zG - 0.12], null],
+      extra: [[[0.2, dG + 1.2, zG - 0.1], () => { const h = B(0.12, dG + 1.15 + (up ? 0.2 : 0), zG - 0.12), m = B(0.27, dG + 1.12, zG - 0.06 - (up ? 0.12 : 0)); limb(h, m, WOOD_D, (h || { s: 20 }).s * 0.04); if (m) dot(m, m.s * 0.06, '#f2e2bd'); }]] }, parts);
+    // 采振り at the bow, facing the crew and swinging the 采配 to the beat
+    const tS = 0.925, dS = hullH(tS) - 0.33 + bob, wv = Math.sin(b.phase), hS = [-0.05 + wv * 0.35, dS + 1.95, tS * L - 0.25];
+    stander(K, b, 0, tS, bob, { shirt: b.dark, crest: b.color, hair: 1, yaw: Math.PI, lean: 0.12, shout: true, hands: [null, hS],
+      extra: [[hS, () => { const h = Bv(hS), t2 = Bv([hS[0] + wv * 0.1, hS[1] + 0.32, hS[2]]); if (!h || !t2) return; limb(h, t2, WOOD_D, h.s * 0.035);
+        for (let k = 0; k < 6; k++) { const e = Bv([hS[0] + wv * 0.1 + (k - 2.5) * 0.045 - wv * 0.12, hS[1] - 0.05, hS[2]]); limb(t2, e, '#fff', h.s * 0.04); } }]] }, parts);
     // centre post with the team flag
-    items.push([0.5, () => { const p0 = B(0, hullH(0.5), 0.5 * L), p1 = B(0, hullH(0.5) + 2.6, 0.5 * L); if (!p0 || !p1) return; seg(p0, p1, '#eee', p1.s * 0.06);
-      const wv = u => Math.sin(S.time * 6 + u * 4 + b.lane) * 0.1 * u * (1 + b.v / 10), pts = [];
-      for (let i = 0; i <= 5; i++) { const u = i / 5; pts.push(B(u * 1.0 + wv(u), hullH(0.5) + 2.55, 0.5 * L - u * 0.3)); }
-      for (let i = 5; i >= 0; i--) { const u = i / 5; pts.push(B(u * 1.0 + wv(u), hullH(0.5) + 1.95, 0.5 * L - u * 0.3)); }
-      poly(ok(pts), b.color, '#fff', Math.max(0.5, p1.s * 0.03));
-      const c = B(0.5, hullH(0.5) + 2.25, 0.5 * L - 0.15); if (c) { const k = sprite('k' + b.kanji, 40, 40, g => { g.fillStyle = '#fff'; g.font = '900 32px "M PLUS Rounded 1c",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(b.kanji, 20, 22); });
-        const sz = Math.max(6, c.s * 0.5); ctx.drawImage(k, c.x - sz / 2, c.y - sz / 2, sz, sz); } }]);
-    // あか汲み (bailer) scooping with a bucket, and the 舵取り with the long steering oar at the stern
-    items.push([0.1, () => { const z = 0.1 * L, h0 = hullH(0.1) - 0.2 + bob, hip = B(0.15, h0 + 0.2, z); if (!hip) return; const s = hip.s;
-      const dip = Math.max(0, Math.sin(S.time * 3 + b.lane)); const sh = B(0.15, h0 + 0.75 - dip * 0.25, z + 0.2), hd = B(0.15, h0 + 1.0 - dip * 0.3, z + 0.3);
-      seg(hip, sh, b.dark, s * 0.34); const bk = B(0.4, h0 + 0.3 + dip * 0.2, z + 0.3); seg(sh, bk, '#e8b98f', s * 0.09); if (bk) { ctx.fillStyle = '#6b8fb3'; ctx.fillRect(bk.x - s * 0.12, bk.y - s * 0.1, s * 0.24, s * 0.2); } if (hd) dot(hd, s * 0.15, '#2a1c12'); }]);
-    items.push([0.02, () => standing(B, 0.3, 0.03, bob, b.dark, '#fff', (sh, h0, z, s) => { const hand = B(0.6, h0 + 0.85, z - 0.2), end = B(0.95, -0.1, z - 3.0); inkSeg(hand, end, '#c99a5a', s * 0.1); inkSeg(sh, hand, SKIN, s * 0.12); })]);
-    items.sort((a, c) => c[0] - a[0]).forEach(([, fn]) => fn());
+    parts.push([(Bv([0, 1.5, 0.49 * L]) || { z: 0 }).z, () => { const h0 = hullH(0.49) - 0.3, p0 = B(0, h0, 0.49 * L), p1 = B(0, h0 + 2.9, 0.49 * L); if (!p0 || !p1) return; limb(p0, p1, '#f4f4f4', p1.s * 0.05);
+      const wvf = u => Math.sin(S.time * 6 + u * 4 + b.lane) * 0.12 * u * (1 + b.v / 10), pts = [];
+      for (let i = 0; i <= 6; i++) { const u = i / 6; pts.push(B(u * 1.15 + wvf(u), h0 + 2.85, 0.49 * L - u * 0.35)); }
+      for (let i = 6; i >= 0; i--) { const u = i / 6; pts.push(B(u * 1.15 + wvf(u), h0 + 2.15, 0.49 * L - u * 0.35)); }
+      inkFill(ok(pts), b.color, Math.max(1.2, p1.s * 0.03));
+      const c = B(0.55, h0 + 2.5, 0.49 * L - 0.17); if (c) { const k = sprite('k' + b.kanji + fontsOK(), 40, 40, g => { g.fillStyle = '#fff'; g.strokeStyle = INK; g.lineWidth = 5; g.lineJoin = 'round'; g.font = '900 32px "M PLUS Rounded 1c",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.strokeText(b.kanji, 20, 22); g.fillText(b.kanji, 20, 22); });
+        const sz = Math.max(6, c.s * 0.55); ctx.drawImage(k, c.x - sz / 2, c.y - sz / 2, sz, sz); } }]);
+    // あか汲み (bailer) scooping water out with a bucket
+    const tB = 0.115, dB = hullH(tB) - 0.33 + bob, scoop = Math.max(0, Math.sin(S.time * 3 + b.lane)), bk = [0.16, dB + 0.12 + scoop * 0.45, tB * L + 0.3];
+    stander(K, b, 0.05, tB, bob, { shirt: b.dark, crest: b.color, hair: 2, crouch: true, lean: 0.75 - scoop * 0.35, hands: [vA(bk, [-0.1, 0.08, 0]), vA(bk, [0.1, 0.08, 0])],
+      extra: [[bk, () => { const r1 = [], r2 = []; for (let i = 0; i < 8; i++) { const a = i / 8 * 6.283; r1.push(Bv([bk[0] + Math.cos(a) * 0.12, bk[1] + 0.1, bk[2] + Math.sin(a) * 0.12])); r2.push(Bv([bk[0] + Math.cos(a) * 0.09, bk[1] - 0.1, bk[2] + Math.sin(a) * 0.09])); }
+        const h = hull2(r1.concat(r2)); if (h.length > 2) inkFill(h, '#4f86c6', Math.max(1, (r1[0] || { s: 20 }).s * 0.03)); }]] }, parts);
+    // 舵取り standing on the stern deck with the long steering oar
+    const tR = 0.07, dR = hullH(tR) - 0.33 + bob, oT = [0.5, dR + 1.0, tR * L - 0.35], oE = [1.0, -0.3, -2.6];
+    stander(K, b, 0.24, tR, bob, { shirt: b.dark, crest: b.color, hair: 0, yaw: 0.3, lean: 0.32, crouch: 0.5, hands: [vLerp(oT, oE, 0.04), vLerp(oT, oE, 0.2)],
+      extra: [[vLerp(oT, oE, 0.35), () => shaft(K, oT, oE, 0, 1, { ub: 0.78, bw: 0.1, w: 0.06, splash: 0, bx: [0, 1, 0] })]] }, parts);
+
+    // draw order: far side of the hull, far paddles, inside, crew (by depth), near side, near paddles
+    plank(-near); if (!behind) transom();
+    low[-near].forEach(f => f());
+    inkFill(ok([...I[-1], ...I[1].slice().reverse()]), WOOD_IN, lw);
+    const s1 = mid ? mid.s : 20;
+    seats.forEach(t => polyline([B(-hullW(t) * 0.8, hullH(t) - 0.12, t * L), B(hullW(t) * 0.8, hullH(t) - 0.12, t * L)], WOOD, Math.max(1, s1 * 0.07), true));
+    inkFill(ok([B(-hullW(0.03) * 0.8, hullH(0.03) - 0.05, 0.03 * L), B(hullW(0.03) * 0.8, hullH(0.03) - 0.05, 0.03 * L), B(hullW(0.075) * 0.8, hullH(0.075) + 0.02, 0.075 * L), B(-hullW(0.075) * 0.8, hullH(0.075) + 0.02, 0.075 * L)]), WOOD, lw * 0.8);
+    polyline(ok(G[-1]), '#f0c487', Math.max(1, s1 * 0.05), true); polyline(ok(G[1]), '#f0c487', Math.max(1, s1 * 0.05), true);
+    parts.sort((a, c) => c[0] - a[0]).forEach(p => p[1]());
+    plank(near); if (behind) transom();
+    low[near].forEach(f => f());
     // team name tag
-    const lp = B(0, 3.3, L * 0.18);
+    const lp = B(0, 3.6, L * 0.18);
     if (lp) { const font = '800 24px "M PLUS Rounded 1c",sans-serif', tw = measure(font, b.name) + 28, th = 38;
       const c = sprite('tag' + b.name + b.isPlayer, tw + 4, th + 12, g => {
         g.fillStyle = b.isPlayer ? '#ffd23f' : 'rgba(0,0,0,.62)'; g.strokeStyle = '#fff'; g.lineWidth = 3;
@@ -571,7 +713,11 @@ const Scene = (() => {
     S.labelA += (wantL - S.labelA) * Math.min(1, dt * 2);
   }
   function showLabels() { S.labelT = 0; }
+  let DET = 1, _ema = 16, _lastT = 0, _detT = 0;
   function render(dt) {
+    const now = performance.now(); if (_lastT) { const f = Math.min(100, now - _lastT); _ema = _ema * 0.94 + f * 0.06; } _lastT = now;
+    if (now - _detT > 1500) { _detT = now; if (_ema > 24 && DET < 2.2) DET = Math.min(2.2, DET + 0.4); else if (_ema < 15 && DET > 1) DET = Math.max(1, DET - 0.2); }
+    if (window.PEIRON_FIXDET) DET = window.PEIRON_FIXDET;
     ctx.setTransform(RES, 0, 0, RES, 0, 0);
     if (cam.shake > 0) ctx.translate((Math.random() - 0.5) * cam.shake * 6, (Math.random() - 0.5) * cam.shake * 4);
     drawSky(); drawLand(); drawWater();
