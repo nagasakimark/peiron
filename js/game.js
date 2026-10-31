@@ -56,7 +56,7 @@
       case 'can': return `<div class="pic-can"><div class="act">${stk(p.img)}</div>${p.ok ? STAMP_OK : STAMP_NG}</div>`;
       case 'prep': return `<div class="pic-prep">${prepSVG(p.img, p.place, p.prep)}</div>`;
       case 'ans': return `<div class="pic-ans"><div class="topic">${stk(p.img)}</div><div class="kid">${stk(p.yes ? 'p_yes' : 'p_no')}${p.yes ? STAMP_OK : STAMP_NG}</div></div>`;
-      case 'week': return `<div class="pic-week">${stk(p.img)}<div class="week">${['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) =>
+      case 'week': return `<div class="pic-week">${stk(p.img)}<div class="week">${['月', '火', '水', '木', '金', '土', '日'].map((d, i) =>
         `<div>${(p.on || []).includes(i) ? HANKO : EMPTY}${d}</div>`).join('')}</div></div>`;
     }
     return '';
@@ -208,12 +208,12 @@
     wh: () => `<div class="rGrid3">${[['What', 'なに？', 'gift', 'What do you want?'], ['Where', 'どこ？', 'map', 'Where is the park?'], ['When', 'いつ？', 'cake', 'When is your birthday?'],
       ['Who', 'だれ？', 'p_he', 'Who is this?'], ['Why', 'なぜ？', 'lake', 'Why do you want to go?'], ['How', 'どう？・いくつ？', 'apple3', 'How many apples?']].map(([w, jp, img, ex]) =>
       `<div class="rWh"><div class="ic">${stk(img)}</div><div><div class="en">${B(w)}</div><div class="jp">${jp}</div><div class="ex">${ex.replace(w, `<b>${w}</b>`)}</div></div></div>`).join('')}</div>
-      <div class="rTip">こたえを みて、なにを きいているか かんがえよう！（ばしょ → Where、とき → When、ひと → Who）</div>`,
+      <div class="rTip">こたえを みて かんがえよう！ ばしょ → Where、とき → When、ひと → Who</div>`,
     past: () => `<div class="rPastHead"><div class="rPH"><span class="now">いつも・いま<small>Every day / Today</small></span><span class="ar">→</span><span class="past">きのう・まえ<small>Yesterday / Last ~</small></span></div><div class="rPH"><span class="now">いつも・いま<small>Every day / Today</small></span><span class="ar">→</span><span class="past">きのう・まえ<small>Yesterday / Last ~</small></span></div></div>
       <div class="rPairs">${[['go', 'went'], ['eat', 'ate'], ['see', 'saw'], ['play', 'play<b class="k">ed</b>'], ['watch', 'watch<b class="k">ed</b>'], ['is', 'was']].map(([n, p]) =>
         `<div class="rPair"><span class="en now">${n}</span><span class="ar">→</span><span class="en past">${p.includes('<b') ? p : B(p)}</span></div>`).join('')}</div>
       <div class="rTip"><b>Yesterday</b>・<b>Last ~</b> が あったら、かたちが かわる！ <b>-ed</b> が つく ことばも あるよ。</div>`,
-    freq: () => `<div class="rFreq">${[['always', 'いつも', 7], ['usually', 'たいてい', 5], ['sometimes', 'ときどき', 2], ['never', 'ぜんぜん しない', 0]].map(([w, jp, n]) =>
+    freq: () => `<div class="rFreq"><div class="rFr head"><div></div><div class="jp">1しゅうかんで…</div><div class="days">${['月', '火', '水', '木', '金', '土', '日'].map((d, i) => `<span class="d${i}">${d}</span>`).join('')}</div><div></div></div>${[['always', 'いつも', 7], ['usually', 'たいてい', 5], ['sometimes', 'ときどき', 2], ['never', 'ぜんぜん しない', 0]].map(([w, jp, n]) =>
       `<div class="rFr"><div class="en">${B(w)}</div><div class="jp">${jp}</div><div class="days">${Array.from({ length: 7 }, (_, i) => i < n ? HANKO : EMPTY).join('')}</div><div class="n">${n}/7</div></div>`).join('')}</div>
       <div class="rTip">1しゅうかんで なんかい する？ ◯ の かずで えらぼう！</div>`,
     aan: () => `<div class="rCols two">
@@ -321,7 +321,7 @@
   function nextQ() {
     q = deck.next(qCount); qCount++;
     const setc = (q._set || cfg.set).color; $('card').style.setProperty('--setc', setc);
-    $('card').innerHTML = renderPic(q.pic); $('card').classList.remove('pop'); void $('card').offsetWidth; $('card').classList.add('pop');
+    $('card').innerHTML = renderPic(q.pic); $('card').classList.remove('cardIn'); void $('card').offsetWidth; $('card').classList.add('cardIn');
     $('qtop').innerHTML = q.top ? highlightCue(q.top, q.cue) : '';
     $('qbot').textContent = q.bot || '';
     $('qarea').classList.toggle('three', !!(q.top || q.bot));
