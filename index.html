@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ペーロンレース Peiron Race</title>
+<link rel="icon" href="img/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Andika:wght@400;700&family=Baloo+2:wght@600;800&family=M+PLUS+Rounded+1c:wght@500;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="stage">
+  <canvas id="scene"></canvas>
+
+  <!-- race HUD -->
+  <div id="hud" class="hidden">
+    <div id="pos"><b>1</b><i>st</i></div>
+    <div id="combo"><span></span><span></span><span></span><em>BOOST!</em></div>
+    <div id="track">
+      <div class="lbl l">スタート</div><div class="lbl m">ターン</div><div class="lbl r">ゴール</div>
+      <div class="bar"><div class="turnmark"></div></div>
+      <div id="trackBoats"></div>
+    </div>
+  </div>
+  <div id="topBtns">
+    <button class="rbtn" id="btnSound" title="おと"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path class="on" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke-width="2.2" stroke-linecap="round"/><path class="off" d="M16.5 9.5l5 5m0-5l-5 5" stroke-width="2.4" stroke-linecap="round"/></svg></button>
+    <button class="rbtn" id="btnFull" title="ぜんがめん"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <button class="rbtn hidden" id="btnHome" title="やめる"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke-width="3" stroke-linecap="round"/></svg></button>
+  </div>
+  <div id="banner"></div>
+  <div id="popups"></div>
+
+  <!-- question dock -->
+  <div id="dock">
+    <div id="card"></div>
+    <div id="qarea">
+      <div id="qtop" class="bubble"></div>
+      <div id="qline"></div>
+      <div id="qbot" class="bubble answer"></div>
+      <div id="choices">
+        <button class="choice c1" data-i="0"><span class="key">1</span><span class="t"></span></button>
+        <button class="choice c2" data-i="1"><span class="key">2</span><span class="t"></span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- title / mode select -->
+  <div id="title" class="screen">
+    <div class="logo">
+      <div class="jp">ペーロン<span>レース</span></div>
+      <div class="en">PEIRON RACE</div>
+      <div class="tag">ただしい ことばを えらんで、ふねを こごう！</div>
+    </div>
+    <div id="modeGrid"></div>
+  </div>
+
+  <!-- setup -->
+  <div id="setup" class="screen hidden">
+    <div class="setupBox">
+      <div id="setupMode"></div>
+      <div class="opts">
+        <div class="opt"><label>なまえ</label><input id="nameIn" maxlength="8" placeholder="YOU" autocomplete="off" spellcheck="false"></div>
+        <div class="opt"><label>ふねの いろ</label><div class="seg" id="segColor"></div></div>
+        <div class="opt"><label>レースの ながさ</label><div class="seg" id="segLen">
+          <button data-v="10">みじかい</button><button data-v="14" class="on">ふつう</button><button data-v="20">ながい</button></div></div>
+        <div class="opt"><label>あいての つよさ</label><div class="seg" id="segCpu">
+          <button data-v="0">やさしい</button><button data-v="1" class="on">ふつう</button><button data-v="2">つよい</button></div></div>
+        <div class="how"><span>①</span> えらぶ <span>②</span> ふねが すすむ <span>③</span> 3かい つづけて せいかいで ブースト！</div>
+        <div class="setupBtns"><button class="big ghost" id="btnBack">もどる</button><button class="big go" id="btnStart">スタート！</button></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- results -->
+  <div id="results" class="screen hidden">
+    <canvas id="confetti"></canvas>
+    <div class="resBox">
+      <div id="resHead"></div>
+      <div id="podium"></div>
+      <div id="resStats"></div>
+      <div class="revTitle">ふくしゅう Review</div>
+      <div id="review"></div>
+      <div class="setupBtns"><button class="big ghost" id="btnMenu">ほかの ゲーム</button><button class="big go" id="btnAgain">もういちど！</button></div>
+    </div>
+  </div>
+
+  <div id="loading" class="hidden">よみこみちゅう…</div>
+</div>
+
+<script src="js/questions.js"></script>
+<script src="js/assets.js"></script>
+<script src="js/sfx.js"></script>
+<script src="js/scene.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
