@@ -5,7 +5,7 @@
   --round:"Baloo 2","M PLUS Rounded 1c",sans-serif;
 }
 *{box-sizing:border-box}
-html,body{margin:0;height:100%;overflow:hidden;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;
+html,body{margin:0;position:fixed;inset:0;width:100%;height:100%;overflow:hidden;overscroll-behavior:none;touch-action:manipulation;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;
   background:#0b3d63 radial-gradient(circle at 50% 0%,#1f6fa5,#0a3557 70%);font-family:var(--jp);color:var(--ink)}
 button{font-family:inherit;cursor:pointer;border:none}
 .hidden{display:none!important}

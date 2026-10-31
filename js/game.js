@@ -261,8 +261,12 @@
   $('btnHome').onclick = () => { if (confirmQuit()) showTitle(); };
   function confirmQuit() { return true; }
   $('btnSound').onclick = () => { ac(); setMuted(!muted); };
-  $('btnFull').onclick = () => { const d = document; if (!d.fullscreenElement) (d.documentElement.requestFullscreen || (() => { })).call(d.documentElement).catch?.(() => { }); else d.exitFullscreen(); };
+  $('btnFull').onclick = () => { const d = document, el = d.documentElement;
+    if (!d.fullscreenElement) { const p = (el.requestFullscreen || el.webkitRequestFullscreen || (() => Promise.resolve())).call(el);
+      Promise.resolve(p).then(() => screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape').catch(() => { })).catch(() => { }).finally(() => setTimeout(fit, 300)); }
+    else { d.exitFullscreen && d.exitFullscreen(); setTimeout(fit, 300); } };
   $('nameIn').addEventListener('input', e => { cfg.name = e.target.value.trim(); store.set('name', cfg.name); });
+  $('nameIn').addEventListener('blur', () => setTimeout(fit, 300));
   $('nameIn').addEventListener('keydown', e => { if (e.key === 'Enter') startRace(); e.stopPropagation(); });
 
   /* ---------- racers ---------- */
@@ -527,14 +531,21 @@
     try { update(dt); Scene.render(dt); } catch (e) { if (!frame.warned) { console.error(e); frame.warned = true; } } }
 
   /* ---------- layout ---------- */
+  // Fit the 1280x600 stage to any screen. On a phone held upright, the game turns sideways to fill it.
+  let fitSc = 1;
+  function viewSize() { const v = window.visualViewport; return [document.documentElement.clientWidth || (v ? v.width : innerWidth), document.documentElement.clientHeight || (v ? v.height : innerHeight)]; }
   function fit() {
-    const sc = Math.min(innerWidth / 1280, innerHeight / 600);
-    $('stage').style.transform = `translate(-50%,-50%) scale(${sc})`;
-    Scene.resize(sc);
+    if (document.activeElement && document.activeElement.tagName === 'INPUT') return;   // the on-screen keyboard is open: don't jump around
+    const [w, h] = viewSize(), turn = h > w * 1.1 && w < 820;
+    const sc = turn ? Math.min(h / 1280, w / 600) : Math.min(w / 1280, h / 600);
+    $('stage').style.transform = `translate(-50%,-50%)${turn ? ' rotate(90deg)' : ''} scale(${sc})`;
+    document.body.classList.toggle('turned', turn);
+    if (Math.abs(sc - fitSc) > 0.01 || !fit.done) { fitSc = sc; fit.done = true; Scene.resize(sc); }
   }
   Scene.init($('scene'));
-  addEventListener('resize', fit);
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => Scene.resize(Math.min(innerWidth / 1280, innerHeight / 600)));
+  addEventListener('resize', fit); addEventListener('orientationchange', () => setTimeout(fit, 250));
+  if (window.visualViewport) visualViewport.addEventListener('resize', fit);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => Scene.resize(fitSc));
   // Only ask questions whose pictures have been drawn, so the picture always matches the sentence.
   const picsOf = p => [p.img, p.who, p.type === 'ans' ? (p.yes ? 'p_yes' : 'p_no') : null].filter(Boolean);
   QUESTION_SETS.forEach(s => { const ok = s.items.filter(it => picsOf(it.pic).every(id => STICKERS.has(id)));
