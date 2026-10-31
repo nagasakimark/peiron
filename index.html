@@ -80,6 +80,7 @@
   <!-- results -->
   <div id="results" class="screen hidden">
     <canvas id="confetti"></canvas>
+    <div class="resRow">
     <div class="resBox">
       <div id="resHead"></div>
       <div id="podium"></div>
@@ -89,6 +90,13 @@
       <div id="review"></div>
       <div class="setupBtns"><button class="big ghost" id="btnMenu">ほかの ゲーム</button><button class="big go" id="btnAgain">もういちど！</button></div>
     </div>
+    <div id="lb" class="hidden">
+      <div class="lbHead"><b>ランキング</b><span>TOP 100</span></div>
+      <div id="lbSub"></div>
+      <div id="lbView"><div id="lbList"></div></div>
+      <div id="lbNote"></div>
+    </div>
+    </div>
   </div>
 
   <div id="loading" class="hidden">よみこみちゅう…</div>
@@ -97,6 +105,8 @@
 <script src="js/questions.js"></script>
 <script src="js/assets.js"></script>
 <script src="js/sfx.js"></script>
+<script src="js/lb-config.js"></script>
+<script src="js/leaderboard.js"></script>
 <script src="js/scene.js"></script>
 <script src="js/game.js"></script>
 </body>

@@ -1,0 +1,18 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "boards": {
+      "$len": {
+        "$mode": {
+          ".read": "($len === 'long' || $len === 'short') && $mode.matches(/^(can|prep|ans|wh|past|freq|aan|mix)$/) && query.orderByValue == true && query.limitToFirst <= 100",
+          ".indexOn": ".value",
+          "$id": {
+            ".write": "($len === 'long' || $len === 'short') && $mode.matches(/^(can|prep|ans|wh|past|freq|aan|mix)$/) && !data.exists() && newData.exists()",
+            ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= ($len === 'long' ? 25000 : 12000) && newData.val() <= 1800000"
+          }
+        }
+      }
+    }
+  }
+}

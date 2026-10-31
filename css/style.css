@@ -208,3 +208,30 @@ button{font-family:inherit;cursor:pointer;border:none}
 .fact{font-weight:800;font-size:15px;color:#1d6fb8;background:#e6f2fb;border-radius:12px;padding:6px 12px}
 #results .fact{margin:4px 0 2px}
 .pod em{font-style:normal;font-size:13px;opacity:.9;font-family:var(--round)}
+
+/* ---------------- online leaderboard ---------------- */
+.resRow{display:flex;gap:16px;align-items:center}
+.resRow.withLb .resBox{width:770px;padding:16px 24px 20px}
+#lb{width:370px;height:540px;background:#fffaf0;border-radius:30px;padding:14px 16px 14px;box-shadow:0 10px 0 rgba(0,0,0,.3);display:flex;flex-direction:column}
+.lbHead{display:flex;align-items:baseline;justify-content:center;gap:8px}
+.lbHead b{font-weight:900;font-size:30px;color:#c81d25}
+.lbHead span{font-family:var(--round);font-weight:800;font-size:18px;color:#fff;background:#c81d25;border-radius:10px;padding:0 8px}
+#lbSub{text-align:center;font-weight:800;font-size:14px;color:#7a4e26;margin:2px 0 6px}
+#lbView{position:relative;flex:1;min-height:0;overflow:hidden;background:#f3ead8;border-radius:18px;padding:0}
+#lbList{position:relative}
+.lbr{position:absolute;left:8px;right:8px;top:6px;height:34px;display:flex;align-items:center;gap:10px;background:#fff;border-radius:12px;padding:0 12px;
+  box-shadow:0 2px 0 rgba(0,0,0,.08);transition:transform .22s cubic-bezier(.3,1.4,.5,1),opacity .3s;will-change:transform}
+.lbr .rk{width:40px;text-align:center;font-family:var(--round);font-weight:800;font-size:19px;color:#7a4e26}
+.lbr.r1 .rk,.lbr.r2 .rk,.lbr.r3 .rk{width:32px;height:28px;margin:0 4px;border-radius:50%;line-height:28px;font-size:17px;color:#fff}
+.lbr.r1 .rk{background:#ffb703}.lbr.r2 .rk{background:#9aa9b9}.lbr.r3 .rk{background:#c87a3c}
+.lbr .tm{flex:1;font-family:var(--round);font-weight:800;font-size:22px;color:var(--ink);letter-spacing:.5px}
+.lbr.out{opacity:0}
+.lbr.me{z-index:5;transition:none;background:linear-gradient(#fff3a0,#ffc61a);box-shadow:0 3px 0 #d99a00,0 0 0 3px #fff,0 6px 14px rgba(0,0,0,.25)}
+.lbr.me .rk{color:#5a3a00}.lbr.me .tm{color:#5a3a00}
+.lbr.me i{font-style:normal;font-weight:900;font-size:14px;color:#fff;background:#e23b3b;border-radius:9px;padding:1px 8px}
+.lbr.me.land{animation:lbLand .5s ease-out}
+@keyframes lbLand{0%{scale:1}35%{scale:1.14}65%{scale:.97}100%{scale:1}}
+.lbr.me.land::after{content:"";position:absolute;inset:-6px;border-radius:16px;border:3px solid #ffd23f;animation:lbRing .7s ease-out forwards}
+@keyframes lbRing{0%{opacity:1;transform:scale(.9)}100%{opacity:0;transform:scale(1.25)}}
+#lbNote{text-align:center;font-weight:900;font-size:18px;color:#7a4e26;margin-top:8px;min-height:26px}
+#lbNote.good{color:#c81d25;font-size:22px;animation:cardPop .45s ease-out}

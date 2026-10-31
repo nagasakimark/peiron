@@ -142,14 +142,17 @@
   const CPU = [{ int: 7.6, acc: 0.7 }, { int: 5.9, acc: 0.78 }, { int: 4.2, acc: 0.88 }];   // seconds per answer, accuracy
   // Rowing model: every boat always rows at BASE speed. Right answers add a speed boost that fades away;
   // 3 in a row adds a bigger BOOST. A wrong answer makes the crew stumble for a moment (they never stop).
-  const BASE = 5, KICK = 9, COMBO_KICK = 5, MAX_EXTRA = 26, FADE = 2.4, TURN_T = [3.6, 3.2, 2.8];
-  function kick(r, combo) { r.extra = Math.min(MAX_EXTRA, r.extra + KICK + (combo ? COMBO_KICK : 0)); r.boost = combo ? 2.6 : 0; }
+  // Speed has no hard cap: each boost adds less the faster you already are, and a quicker answer gives a
+  // slightly bigger boost (±8%). So finish times are continuous and rarely tie on the leaderboard.
+  const BASE = 5, KICK = 9, COMBO_KICK = 5, SOFT_CAP = 48, FADE = 2.4, TURN_T = [3.6, 3.2, 2.8];
+  function kick(r, combo, q = 1) { r.extra = Math.min(60, r.extra + (KICK + (combo ? COMBO_KICK : 0)) * q * Math.max(0, 1 - r.extra / SOFT_CAP)); r.boost = combo ? 2.6 : 0; }
+  const quick = secs => Math.max(0.92, Math.min(1.08, 1.1 - 0.035 * secs));
   function stumble(r) { r.extra *= 0.4; r.boost = 0; r.stumble = 1.0; }
 
   /* ---------- state ---------- */
   const cfg = { set: null, len: 1, cpu: 1, color: store.get('color', 'red'), name: store.get('name', '') };
   let state = 'title', racers = [], player = null, trackLen = 0;
-  let q = null, locked = true, qCount = 0, answered = 0, correctN = 0, streak = 0, missed = [], raceT = 0, deck = null, endT = 0, countT = 0, lastCount = 4;
+  let qShownT = 0, lbJob = null, q = null, locked = true, qCount = 0, answered = 0, correctN = 0, streak = 0, missed = [], raceT = 0, deck = null, endT = 0, countT = 0, lastCount = 4;
 
   /* ---------- question deck: shuffled bag + wrong answers come back ---------- */
   function makeDeck(set) {
@@ -230,7 +233,7 @@
     ac(); stopVoice(); sfx('click', 0.6);
     $('nameIn').blur();
     idleRace();
-    q = null; locked = true; qCount = 0; answered = 0; correctN = 0; streak = 0; missed = []; raceT = 0; endT = 0;
+    lbJob = null; cancelAnimationFrame(lbAnim); q = null; locked = true; qCount = 0; answered = 0; correctN = 0; streak = 0; missed = []; raceT = 0; endT = 0;
     deck = makeDeck(cfg.set);
     show(null); $('hud').classList.remove('hidden'); $('btnHome').classList.remove('hidden');
     $('setup').classList.add('hidden'); $('results').classList.add('hidden');
@@ -273,7 +276,7 @@
     const ch = shuffle([q.correct, q.wrong]); q._choices = ch;
     document.querySelectorAll('.choice').forEach((b, i) => { b.disabled = false; b.className = 'choice ' + (i ? 'c2' : 'c1') + (Math.max(ch[0].length, ch[1].length) > 11 ? ' small' : '');
       b.querySelector('.t').textContent = ch[i]; });
-    locked = false;
+    locked = false; qShownT = raceT;
   }
   function choose(i) {
     if (state !== 'race' || locked || !q) return; locked = true; ac();
@@ -285,7 +288,7 @@
     say(q.say);
     if (ok) {
       correctN++; streak++;
-      const boosted = streak >= 3; kick(player, boosted);
+      const boosted = streak >= 3; kick(player, boosted, quick(raceT - qShownT));
       if (player.leg === 'turn') { player.nice = 1.6; popup('ナイスターン！', 'gold'); }
       sfx('correct', 0.2);
       Scene.splash(player, 14, 1.2, boosted);
@@ -317,7 +320,7 @@
   }
   const prog = r => Scene.Course.progress(r);
   function ranking() { return racers.slice().sort((a, b) => (a.finished && b.finished) ? a.finishT - b.finishT : a.finished ? -1 : b.finished ? 1 : prog(b) - prog(a)); }
-  const fmtT = t => `${Math.floor(t / 60)}:${(t % 60).toFixed(2).padStart(5, '0')}`;
+  const fmtT = t => `${Math.floor(t / 60)}:${(t % 60).toFixed(3).padStart(6, '0')}`;
 
   /* ---------- results ---------- */
   function showResults() {
@@ -341,9 +344,63 @@
       const full = (m.top ? esc(m.top) + ' ' : '') + esc(m.pre) + `<b>${esc(m.correct)}</b>` + esc(m.post) + (m.bot ? ' ' + esc(m.bot) : '');
       return `<div class="rev"><button data-k="${k}"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="#fff"/><path d="M16 8.5a5 5 0 0 1 0 7" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg></button><span>${full}</span></div>`; }).join('') : '<div class="perfect">パーフェクト！ ぜんぶ せいかい！</div>';
     $('review').querySelectorAll('button').forEach(b => b.onclick = () => say(list[+b.dataset.k].say));
+    showBoard();
     show('results'); $('hud').classList.add('hidden'); $('btnHome').classList.add('hidden');
     if (place <= 3) { sfx('fanfare', 0.35); confetti(); }
     say(place === 1 ? 'You win!' : place <= 3 ? 'Great!' : 'Good try!');
+  }
+  /* ---------- online TOP-100 board ---------- */
+  const lbKey = () => [cfg.len >= 1 ? 'long' : 'short', cfg.set.id];
+  function submitTime(t) {
+    if (!window.Leaderboard || !Leaderboard.enabled) return null;
+    const [len, mode] = lbKey();
+    return Leaderboard.submit(len, mode, Math.round(t * 1000)).catch(e => ({ error: e }));
+  }
+  function blip(f, vol = 0.05) {
+    if (!AC) return; const t = AC.currentTime, o = AC.createOscillator(), g = AC.createGain(); o.type = 'triangle'; o.frequency.value = f;
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0005, t + 0.07); o.connect(g).connect(master); o.start(t); o.stop(t + 0.08);
+  }
+  let lbAnim = 0;
+  function showBoard() {
+    cancelAnimationFrame(lbAnim);
+    const on = !!(window.Leaderboard && Leaderboard.enabled);
+    $('lb').classList.toggle('hidden', !on); document.querySelector('.resRow').classList.toggle('withLb', on);
+    if (!on) return;
+    $('lbSub').textContent = `${cfg.set.en}　・　${cfg.len >= 1 ? 'ながい コース' : 'みじかい コース'}`;
+    $('lbList').innerHTML = ''; $('lbList').style.height = '0px'; $('lbNote').className = ''; $('lbNote').textContent = 'よみこみちゅう…';
+    const job = lbJob || submitTime(player.finishT), myRace = racers;
+    job.then(res => { if (state === 'results' && racers === myRace) drawBoard(res); });
+  }
+  function drawBoard(res) {
+    const note = $('lbNote'), list = $('lbList'), view = $('lbView'), ROW = 40, ms = Math.round(player.finishT * 1000);
+    if (!res || res.error) { note.textContent = 'ランキングに つながりません'; return; }
+    const row = (k, t, me) => { const d = document.createElement('div'); d.className = 'lbr' + (me ? ' me' : '');
+      d.innerHTML = `<span class="rk"></span><span class="tm">${fmtT(t / 1000)}</span>${me ? '<i>きみ！</i>' : ''}`; d.setRank = r => { d.querySelector('.rk').textContent = r + 1; d.className = d.className.replace(/ r[123]\b/g, '') + (r < 3 ? ' r' + (r + 1) : ''); };
+      d.setPos = p => { d.style.transform = `translateY(${p * ROW}px)`; }; d.setRank(k); d.setPos(k); list.appendChild(d); return d; };
+    const scrollTo = p => { view.scrollTop = Math.max(0, Math.min(list.offsetHeight - view.clientHeight + 12, p * ROW - view.clientHeight / 2 + ROW / 2)); };
+    if (res.rank < 0) {                       // not on the board this time: show the top, and how close they were
+      res.after.forEach((t, k) => row(k, t)); list.style.height = (res.after.length * ROW + 12) + 'px'; view.scrollTop = 0;
+      const cut = res.after[Leaderboard.N - 1];
+      note.textContent = cut ? `100いまで あと ${((ms - cut) / 1000).toFixed(3)}びょう！` : '';
+      return;
+    }
+    // made the board: start at the bottom and climb past everyone to the new position
+    const others = res.before.slice(0, Leaderboard.N), start = Math.min(others.length, Leaderboard.N - 1), goal = res.rank;
+    const rows = others.map((t, k) => row(k, t)); const me = row(start, ms, true);
+    list.style.height = (Math.min(Leaderboard.N, others.length + 1) * ROW + 12) + 'px';
+    const shift = p => rows.forEach((r, k) => { const pos = k >= p ? k + 1 : k; if (r._pos !== pos) { r._pos = pos; r.setPos(pos); r.setRank(pos); r.classList.toggle('out', pos >= Leaderboard.N); } });
+    shift(start); scrollTo(start);
+    const D = Math.min(4.2, 0.8 + (start - goal) * 0.04) * 1000, t0 = performance.now() + 500; let lastR = start;
+    const ease = u => u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
+    const step = now => {
+      const u = Math.max(0, Math.min(1, (now - t0) / D)), p = start + (goal - start) * ease(u), r = Math.round(p);
+      me.setPos(p); scrollTo(p); shift(Math.ceil(p - 0.001));
+      if (r !== lastR) { lastR = r; me.setRank(r); blip(520 + (1 - (r - goal) / Math.max(1, start - goal)) * 620); }
+      if (u < 1) { lbAnim = requestAnimationFrame(step); return; }
+      me.setRank(goal); me.classList.add('land'); if (goal < 4) view.scrollTo({ top: 0, behavior: 'smooth' }); dora(0.18, true); sfx('correct', 0.2);
+      note.className = 'good'; note.textContent = goal === 0 ? 'しんきろく！ 1い！' : `ランクイン！ ${goal + 1}い！`;
+    };
+    lbAnim = requestAnimationFrame(step);
   }
   function confetti() {
     const c = $('confetti'), x = c.getContext('2d'); c.width = 1280; c.height = 600;
@@ -375,6 +432,7 @@
       if (r.leg === 'turn') want = 2.2;                       // the long boat almost stops while it pivots
       if (!racing && state !== 'results') want = 0;
       r.v += (want - r.v) * Math.min(1, dt * 2.4);
+      const p0 = prog(r);
       if (racing || state === 'results') {
         if (r.leg === 1) { r.a += r.v * dt; if (r.a >= C.out) { r.leg = 'turn'; r.phi = 0; r.nice = 0;
             if (r.isPlayer) { banner('ターン！<small>ブイを まわれ！</small>'); sfx('whoosh', 0.35); sfx('cheer', 0.25); Scene.showLabels(); } } }
@@ -396,7 +454,8 @@
           if (b === 0) drum(0.5 * loud, true); else if (b === 1) drum(0.36 * loud, false);
           else if (b === 2) dora(0.16 * loud, true); else dora(0.11 * loud, false); } }
       if (racing && !r.finished && prog(r) >= trackLen) {
-        r.finished = true; r.finishT = raceT;
+        r.finished = true; const p1 = prog(r); r.finishT = Math.round((raceT - (p1 > p0 ? dt * (p1 - trackLen) / (p1 - p0) : 0)) * 1000) / 1000;
+        if (r.isPlayer) lbJob = submitTime(r.finishT);
         if (r.isPlayer) { const pl = ranking().indexOf(r) + 1; banner(`ゴール！<small>${pl}い！</small>`); sfx('cheer', 0.4); dora(0.25, true); say('Goal!'); endT = 2.6; }
       }
     }

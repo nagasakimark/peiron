@@ -5,6 +5,10 @@ Grammar from **Let's Try 1・2** and **New Horizon Elementary 5・6 (2024)**.
 
 Play: open `index.html` (works by double-click too, or on GitHub Pages).
 
+## Online leaderboard (see LEADERBOARD.md)
+
+Top 100 times per game mode and course, stored in a free Firebase Realtime Database. Off until you paste your database URL into `js/lb-config.js`.
+
 ## The race course is real (see AUTHENTICITY.md)
 The 長崎ペーロン選手権大会 starts in front of **Matsugae pier (松が枝)**. Crews race out into the harbour, round a buoy and come back. Every landmark is placed from real map coordinates, so it moves and grows as you row.
 - **Out (toward the Megami Bridge):** めがみおおはし straight ahead, with the Minamiyamate / なべかんむりやま / Tomachi shore on the left and the Tategami / Kiba side on the right.
