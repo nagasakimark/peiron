@@ -62,10 +62,10 @@ const Scene = (() => {
   /* ---------------- the real harbour (metres from the start line) ---------------- */
   // hills: [x, y, height, radius]  (east side = city / Minamiyamate / Tomachi, west side = Inasa / Tategami / Kiba)
   const HILLS = [
-    [-1667, 2030, 333, 420], [-1300, 2600, 250, 420], [-1450, 1200, 230, 420], [-1350, 450, 200, 380], [-1450, -250, 190, 380], [-1700, -900, 210, 420], [-2150, -1350, 170, 300],
+    [-1667, 2030, 333, 420], [-1300, 2600, 250, 420], [-1450, 1200, 230, 420], [-1350, 450, 200, 380], [-1450, -250, 190, 380], [-1700, -900, 210, 420], [-2058, -1251, 220, 284],
     [187, 3684, 366, 520], [-500, 3200, 260, 450], [1000, 3100, 300, 480],
     [1470, 2397, 160, 380], [2000, 1800, 230, 420], [3156, 1398, 386, 650], [2300, 300, 330, 600], [1300, -200, 220, 420],
-    [118, -749, 169, 300], [90, -260, 55, 200], [700, -700, 160, 380], [-200, -1300, 120, 330], [-650, -1950, 190, 330], [300, -1800, 250, 480]];
+    [118, -749, 169, 300], [90, -260, 55, 200], [700, -700, 160, 380], [-200, -1300, 120, 330], [-1066, -2161, 320, 284], [300, -1800, 250, 480], [-2260, -1090, 240, 300], [-880, -2360, 250, 320], [-650, -1950, 170, 300]];
   // each hill keeps one colour layer (by its distance from the middle of the course) so colours never pop
   const URBAN = new Set([0, 1, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]);
   const HLAYER = HILLS.map(([x, y]) => { const d = Math.hypot(x + 330, y + 230); return d > 4500 ? 0 : d > 2200 ? 1 : 2; });
@@ -74,7 +74,9 @@ const Scene = (() => {
     [180, -180, 70, 'おおうらてんしゅどう'], [40, -330, 70, 'グラバーえん'], [118, -749, 169, 'なべかんむりやま'],
     [300, 900, 25, 'でじまワーフ'], [225, 1997, 40, 'ながさきえき'], [80, 60, 30, 'まつがえターミナル'], [187, 3684, 366, 'こんぴらさん'], [3156, 1398, 386, 'ひこさん'],
     [-550, -1474, 40, 'とまちしょうがっこう']];
-  const hillAt = (X, Y) => { let m = 0; for (const [x, y, h, w] of HILLS) { const d2 = ((X - x) ** 2 + (Y - y) ** 2) / (w * w); m = Math.max(m, h * Math.exp(-d2)); } return m; };
+  const prof = q => q >= 1 ? 0 : (1 - q) * (1 - q);          // q = (d / w)^2 ; hills have a firm edge
+  let HW = HILLS.map(h => h[3] * 1.25);                        // effective radius, trimmed to the shoreline below
+  const hillAt = (X, Y) => { let m = 0; HILLS.forEach(([x, y, h], i) => { m = Math.max(m, h * prof(((X - x) ** 2 + (Y - y) ** 2) / (HW[i] * HW[i]))); }); return m; };
   // shorelines, traced from the real course map (south → north)
   const EAST = [[-1314, -2041], [-1305, -1863], [-1188, -1762], [-1055, -1671], [-861, -1623], [-621, -1608], [-596, -1442], [-581, -1223], [-565, -1004], [-498, -776],
     [-359, -644], [-199, -481], [-60, -348], [-43, -176], [26, 5], [60, 200], [150, 450], [300, 800], [400, 1050], [380, 1300], [300, 1700], [250, 2100], [150, 2600]];
@@ -91,6 +93,10 @@ const Scene = (() => {
   const MOORED = [[-75, -265, 1], [-150, -430, 1], [-880, 300, -1], [-870, -40, -1], [-940, -330, -1], [-880, 700, -1]];   // work ships alongside the yards
   const nearPier = (x, y) => x > -80 && x < 140 && y > -220 && y < 260;
   (function genWorld() {
+    // a hill may not spill over the water: its radius ends just past the nearest shoreline
+    const segDist = (px, py, pts) => { let m = 1e9; for (let i = 1; i < pts.length; i++) { const [ax, ay] = pts[i - 1], [bx, by] = pts[i], dx = bx - ax, dy = by - ay;
+      const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy))); m = Math.min(m, Math.hypot(px - ax - dx * t, py - ay - dy * t)); } return m; };
+    HW = HILLS.map(([x, y, , w]) => Math.min(w * 1.25, Math.min(segDist(x, y, EAST), segDist(x, y, WEST)) + 40));
     let k = 0;
     const CITY = ['#eef1f3', '#dde4e9', '#cfd8de', '#f3ece0', '#e7d9c9', '#c9d3dc', '#f6f3ee'];
     const along = (pts, side, fn) => { for (let i = 1; i < pts.length; i++) { const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], len = Math.hypot(x1 - x0, y1 - y0);
@@ -103,7 +109,7 @@ const Scene = (() => {
       BUILD.push({ x: x + nx * off, y: y + ny * off, ang, w: yard ? 30 + hash(i, 3) * 30 : 12 + hash(i, 3) * 12, d: yard ? 18 + hash(i, 4) * 10 : 10, h: yard ? 14 + hash(i, 1) * 16 : 7 + hash(i, 1) * 12,
         c: yard ? (i % 3 ? '#a9b7c1' : '#8aa0ae') : CITY[i % CITY.length], r: yard ? '#6f8796' : '#7a5a48' }); });
     for (let i = 0; i < 2200; i++) {
-      const hi = Math.floor(hash(i, 5) * HILLS.length), hl = HILLS[hi], a = hash(i, 6) * 6.283, rr = Math.sqrt(hash(i, 7)) * hl[3] * 1.2;
+      const hi = Math.floor(hash(i, 5) * HILLS.length), hl = HILLS[hi], a = hash(i, 6) * 6.283, rr = Math.sqrt(hash(i, 7)) * HW[hi] * 0.9;
       const X = hl[0] + Math.cos(a) * rr, Y = hl[1] + Math.sin(a) * rr, e = hillAt(X, Y); if (e < 8) continue;
       const tree = !URBAN.has(hi) || hash(i, 8) < 0.4 || e > hl[2] * (hi === 0 ? 0.55 : 0.75);
       HOUSES.push({ x: X, y: Y, e, L: HLAYER[hi], hi, tree, c: tree ? (i % 2 ? 'rgba(30,80,48,0.55)' : 'rgba(70,130,80,0.45)') : CITY[i % CITY.length] });
@@ -124,8 +130,8 @@ const Scene = (() => {
     // very distant haze ridge all round
     c.fillStyle = '#b5ccd8'; c.beginPath(); c.moveTo(0, HOR + 2);
     for (let x = 0; x <= SW; x += 8) { const b = x / PXD, gap = Math.abs(angDiff(b, 221)) < 26;
-      const isle = gap ? 3 * Math.max(0, Math.sin((b - 200) * 0.9)) * (Math.abs(angDiff(b, 213)) < 4 ? 1 : 0) : 0;
-      c.lineTo(x, gap ? HOR - isle : HOR - 10 - 5 * Math.sin(x * 0.004) - 4 * Math.sin(x * 0.011 + 2)); }
+      const far = 2.5 + 1.5 * Math.sin(b * 0.7) + (Math.abs(angDiff(b, 214)) < 3 ? 3 : 0);
+      c.lineTo(x, gap ? HOR - far : HOR - 10 - 5 * Math.sin(x * 0.004) - 4 * Math.sin(x * 0.011 + 2)); }
     c.lineTo(SW, HOR + 2); c.fill();
   }
   function drawSky() {
@@ -142,9 +148,9 @@ const Scene = (() => {
     LAYERS.forEach(a => a.fill(0));
     HILLS.forEach(([X, Y, h, w], hi) => {
       const [lx, z] = rel(X, Y); if (z < 60) return;
-      const cx = W / 2 + F * lx / z, hp = F * (h - CAMH) / z, wp = F * w / z, La = LAYERS[HLAYER[hi]];
-      const i0 = Math.max(0, Math.floor((cx - 2.6 * wp) / 4)), i1 = Math.min(COLS - 1, Math.ceil((cx + 2.6 * wp) / 4));
-      for (let i = i0; i <= i1; i++) { const d = (i * 4 - cx) / wp, v = hp * Math.exp(-d * d); if (v > La[i]) La[i] = v; }
+      const cx = W / 2 + F * lx / z, hp = F * (h - CAMH) / z, wp = F * HW[hi] / z, La = LAYERS[HLAYER[hi]];
+      const i0 = Math.max(0, Math.floor((cx - wp) / 4)), i1 = Math.min(COLS - 1, Math.ceil((cx + wp) / 4));
+      for (let i = i0; i <= i1; i++) { const d = (i * 4 - cx) / wp, v = hp * prof(d * d); if (v > La[i]) La[i] = v; }
     });
     const hb = [[], [], []], hillZ = HILLS.map(([X, Y]) => rel(X, Y)[1]);
     for (const o of HOUSES) { if (hillZ[o.hi] < 60) continue; const [lx, z] = rel(o.x, o.y); if (z < 150) continue; const s = F / z, x = W / 2 + lx * s; if (x < -10 || x > W + 10) continue;
