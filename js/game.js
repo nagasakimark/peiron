@@ -347,7 +347,7 @@
       const boosted = streak >= 3; kick(player, boosted, quick(raceT - qShownT));
       if (player.leg === 'turn') { player.nice = 1.6; popup('ナイスターン！', 'gold'); }
       sfx('correct', 0.2);
-      Scene.splash(player, 14, 1.2, boosted);
+      Scene.splash(player, 10, 1.1);
       if (player.leg !== 'turn') { if (boosted) { sfx('boost', 0.3); Scene.shake(0.6); popup(streak === 3 ? 'ヨーイサー！' : streak + ' れんぞく！', 'gold'); }
         else popup(pick(['Nice!', 'Great!', 'Good!', 'Yes!', 'いいね！', 'やったね！'])); }
     } else {

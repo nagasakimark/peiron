@@ -513,24 +513,65 @@ const Scene = (() => {
   // 13.6 m cedar hull, bow-shaped (弓形): rises at both bow and stern
   const hullW = t => { let w = 0.66; if (t < 0.12) w *= 0.12 + 0.88 * Math.pow(t / 0.12, 0.55); if (t > 0.78) w *= Math.max(0.05, (1 - t) / 0.22); return w; };
   const hullH = t => 0.5 + 0.55 * Math.pow(Math.abs(t - 0.45) / 0.55, 2.2);
-  function wake(b, B) {
-    const k = Math.min(1, b.v / 12) * 0.5 + 0.12; ctx.globalAlpha = k; ctx.strokeStyle = '#fff'; ctx.lineCap = 'round';
-    for (const sd of [-1, 1]) { let prev = null; for (let i = 0; i <= 8; i++) { const p = B(sd * (0.6 + i * 0.24), 0, -i * 0.9); if (p && prev) { ctx.lineWidth = Math.max(1, p.s * 0.16); ctx.beginPath(); ctx.moveTo(prev.x, prev.y); ctx.lineTo(p.x, p.y); ctx.stroke(); } prev = p; }
-      seg(B(sd * 0.15, 0, L * 0.99), B(sd * 0.75, 0, L * 0.82), '#fff', 2); }
+  /* wakes: foam is dropped on the water behind each stern, then spreads into a V and fades as the boat moves on */
+  const WAKE_LIFE = 2.6, WAKE_DT = 0.09;
+  function trackWakes() {
+    for (const b of S.boats) {
+      const w = b._wk || (b._wk = []), f = fwd(b.hd), r = rgt(b.hd);
+      while (w.length && S.time - w[0].t > WAKE_LIFE) w.shift();
+      if ((b.v || 0) > 0.6 && (!w.length || S.time - w[w.length - 1].t >= WAKE_DT))
+        w.push({ x: b.px - f[0] * (L / 2 + 0.3), y: b.py - f[1] * (L / 2 + 0.3), rx: r[0], ry: r[1], t: S.time, v: b.v, k: Math.random() * 100 });
+    }
+  }
+  function drawWakes() {
+    ctx.fillStyle = '#fff';
+    const quad = (A, Bq, C, D) => { if (!A || !Bq || !C || !D) return; ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(Bq.x, Bq.y); ctx.lineTo(C.x, C.y); ctx.lineTo(D.x, D.y); ctx.closePath(); ctx.fill(); };
+    for (const b of S.boats) {
+      const w = b._wk; if (!w || w.length < 2 || depth(b.px, b.py) > 320) continue;
+      const arm = (p, sd) => { const a = S.time - p.t; return sd * (0.5 + a * (0.45 + p.v * 0.045) + Math.sin(S.time * 2.2 + p.k) * 0.06 * a); };
+      const wid = p => 0.28 + (S.time - p.t) * 0.32, fade = p => { const u = (S.time - p.t) / WAKE_LIFE; return Math.max(0, Math.pow(1 - u, 1.7)) * Math.min(1, p.v / 7); };
+      for (let i = w.length - 1; i > 0; i--) {
+        const p = w[i], o = w[i - 1], f = (fade(p) + fade(o)) / 2 * (0.78 + 0.22 * Math.sin(S.time * 4.5 + p.k)); if (f < 0.02) continue;
+        for (const sd of [-1, 1]) {                                            // the two arms of the V, as continuous foam ribbons
+          const cp = arm(p, sd), co = arm(o, sd), hp = wid(p) / 2, ho = wid(o) / 2;
+          ctx.globalAlpha = 0.5 * f;
+          quad(PW(p.x + p.rx * (cp - hp), p.y + p.ry * (cp - hp), 0), PW(p.x + p.rx * (cp + hp), p.y + p.ry * (cp + hp), 0),
+               PW(o.x + o.rx * (co + ho), o.y + o.ry * (co + ho), 0), PW(o.x + o.rx * (co - ho), o.y + o.ry * (co - ho), 0));
+          if (hash(p.k, sd) < 0.55) { const j = (hash(p.k, sd + 7) - 0.5) * wid(p) * 1.6, q = PW(p.x + p.rx * (cp + j), p.y + p.ry * (cp + j), 0);   // foam specks
+            if (q) { ctx.globalAlpha = 0.7 * f; ctx.beginPath(); ctx.ellipse(q.x, q.y, Math.max(0.6, 0.09 * q.s), Math.max(0.4, 0.035 * q.s), 0, 0, 6.283); ctx.fill(); } }
+        }
+        const ap = S.time - p.t;
+        if (ap < 1.4) {                                                         // churned water straight behind the stern
+          const hp = 0.3 + ap * 0.35, ho = 0.3 + (S.time - o.t) * 0.35, k = (1 - ap / 1.4);
+          ctx.globalAlpha = 0.35 * f * k;
+          quad(PW(p.x - p.rx * hp, p.y - p.ry * hp, 0), PW(p.x + p.rx * hp, p.y + p.ry * hp, 0), PW(o.x + o.rx * ho, o.y + o.ry * ho, 0), PW(o.x - o.rx * ho, o.y - o.ry * ho, 0));
+        }
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+  // bow wave: a flickering white curl where the bow cuts the water
+  function bowWave(b, B) {
+    const k = Math.min(1, (b.v || 0) / 10); if (k < 0.05) return;
+    ctx.fillStyle = '#fff';
+    for (const sd of [-1, 1]) for (let i = 0; i < 4; i++) {
+      const u = i / 3, fl = 0.75 + 0.25 * Math.sin(S.time * 9 + i * 1.7 + sd * 2), q = B(sd * (0.12 + u * 0.55), 0, L * (0.98 - u * 0.16)); if (!q) continue;
+      ctx.globalAlpha = 0.8 * k * (1 - u * 0.6) * fl; ctx.beginPath(); ctx.ellipse(q.x, q.y, Math.max(0.8, (0.22 + u * 0.1) * q.s), Math.max(0.5, 0.08 * q.s), 0, 0, 6.283); ctx.fill();
+    }
     ctx.globalAlpha = 1;
   }
   function rower(K, b, t, sd, ph, bob, parts, low, idx) {
     const z = t * L, gH = hullH(t), hw = hullW(t), seat = gH - 0.13 + bob, lf = Math.cos(ph), sn = Math.sin(ph);
     const x = sd * Math.min(0.3, hw * 0.5), plen = 1.7 + Math.abs(t - 0.45) * 0.7, dip = Math.max(-1, Math.min(1, sn * 2.6)), lift = Math.max(0, -dip);
     // the paddle always passes over a point just outside the gunwale, so it can never cut through the hull
-    const top = [sd * 0.2, gH + 0.55 + 0.16 * lift + bob, z + 0.05 + 0.45 * lf];
+    const top = [sd * 0.2, gH + 0.55 + 0.16 * lift + bob, z + 0.22 + 0.38 * lf];
     const pv = [sd * (hw + 0.06), gH + 0.04 + 0.14 * lift + bob, z + 0.12 + 0.62 * lf];
     const dP = vS(pv, top), lP = Math.hypot(dP[0], dP[1], dP[2]), tip = vA(top, vM(dP, plen / lP));
     const lowH = vLerp(top, pv, 0.8), hands = sd > 0 ? [top, lowH] : [lowH, top], ug = Math.min(1, lP / plen);
     const spl = sn > 0 && lf > 0.3 ? Math.min(1, (1 - sn) * 1.6) * (0.5 + Math.min(0.5, b.v / 20)) : 0, seed = idx * 7 + sd;
     figure(K, { hip: [x, seat, z], lean: 0.16 + 0.34 * (lf * 0.5 + 0.5), twist: 0.08 * lf * sd, spine: 0.54, shirt: b.color, crest: b.dark, kanji: b.kanji,
       hair: (idx * 2 + (sd > 0 ? 1 : 0)) % 3, hands, shout: lf > 0.5 && sn > -0.2, spd: b.v, band: b.color,
-      extra: [[vLerp(top, tip, ug * 0.5), () => shaft(K, top, tip, 0, ug, { grip: 1 })]] }, parts);
+      extra: [[[sd * (hw + 0.1), seat + 0.5, z + 0.55], () => shaft(K, top, tip, 0, ug, { grip: 1 })]] }, parts);
     low[sd].push(() => shaft(K, top, tip, ug, 1, { splash: spl, seed }));
   }
   function stander(K, b, x, t, bob, o, parts) {
@@ -548,7 +589,7 @@ const Scene = (() => {
     for (let i = 0; i <= N; i++) { const t = i / N, z = t * L, w = hullW(t), h = hullH(t);
       for (const sd of [-1, 1]) { G[sd].push(B(sd * w, h, z)); W[sd].push(B(sd * w * 0.8, 0, z)); I[sd].push(B(sd * w * 0.82, h - 0.06, z)); Bd[sd].push(B(sd * w * 0.985, h - 0.17, z)); Pn[sd].push(B(sd * w * 0.97, h - 0.22, z)); } }
     const ok = a => a.filter(Boolean), mid = B(0, 0.5, L / 2), lw = Math.max(1.4, (mid ? mid.s : 20) * 0.04);
-    wake(b, B);
+    bowWave(b, B);
     // soft shadow on the water
     const shp = []; for (let i = 0; i <= 12; i++) { const t = i / 12; shp.push(B(hullW(t) * 1.15, 0, t * L)); } for (let i = 12; i >= 0; i--) { const t = i / 12; shp.push(B(-hullW(t) * 1.15, 0, t * L)); }
     ctx.globalAlpha = 0.28; poly(ok(shp), '#04203f'); ctx.globalAlpha = 1;
@@ -703,7 +744,7 @@ const Scene = (() => {
   function setRace(o) { S.boats = o.boats; S.parts = []; S.boostFx = 0; S.labelT = 0; S.travelled = 0; cam.smoothH = Course.H1; }
   // camera: behind the player's boat, heading lags behind the boat so you SEE it swing round at the turn
   function update(dt, player, opts = {}) {
-    S.time += dt; S.travelled += player.v * dt;
+    S.time += dt; S.travelled += player.v * dt; trackWakes();
     if (cam.smoothH === undefined) cam.smoothH = player.hd;
     let target = player.hd;
     if (opts.idle) target = Course.H1 + Math.sin(S.time * 0.12) * 32;
@@ -712,7 +753,6 @@ const Scene = (() => {
     setCam(player.px - f[0] * back + r[0] * 1.6, player.py - f[1] * back + r[1] * 1.6, cam.smoothH); CAMH = 3.4;
     if (S.debugCam) { setCam(S.debugCam.x, S.debugCam.y, S.debugCam.h); CAMH = S.debugCam.height; }
     S.boostFx += ((player.boost > 0 ? 1 : 0) - S.boostFx) * Math.min(1, dt * 4);
-    if (player.boost > 0 && Math.random() < 0.6) bowSpray(player);
     cam.shake = Math.max(0, cam.shake - dt * 3);
     S.labelT += dt; const wantL = opts.labels || (!opts.idle && S.labelT < 6) ? 1 : 0;
     S.labelA += (wantL - S.labelA) * Math.min(1, dt * 2);
@@ -734,11 +774,12 @@ const Scene = (() => {
     for (const [x, y, sd] of MOORED) far.push([depth(x, y), () => moored(x, y, sd)]);
     far.push([depth(-1562, -1706), megami], [depth(180, -180), ouraCathedral], [depth(40, -330), gloverHouse], [depth(300, 900), dejimaWharf]);
     far.sort((a, b) => b[0] - a[0]).forEach(([z, fn]) => { if (z > 30) fn(); });
+    drawWakes();
     const list = [...pierItems(), ...courseItems()];
     // other crews that slide right past the camera (e.g. during the turn) are skipped so they don't fill the screen
     for (const b of S.boats) { const z = depth(b.px, b.py); if (b.isPlayer || z > 9) list.push([z, () => boat(b)]); }
     list.filter(([z]) => z > -20 && z < 900).sort((a, b) => b[0] - a[0]).forEach(([, fn]) => fn());
-    drawParts(dt); speedLines();
+    drawParts(dt);
   }
   // debug: view from any point/height, e.g. Scene.viewFrom(40, -330, 255, 50) = Glover Garden
   function viewFrom(x, y, h, height) { S.debugCam = { x, y, h, height }; }
