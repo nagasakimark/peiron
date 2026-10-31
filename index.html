@@ -59,7 +59,8 @@
   <!-- setup -->
   <div id="setup" class="screen hidden">
     <div class="setupBox">
-      <div id="setupMode"></div>
+      <div class="leftCol"><div id="setupMode"></div>
+        <button class="rulesBtn" id="btnRules"><svg viewBox="0 0 24 24"><path d="M4 5.5C6.5 4.5 9.5 4.5 12 6c2.5-1.5 5.5-1.5 8-.5v13c-2.5-1-5.5-1-8 .5-2.5-1.5-5.5-1.5-8-.5z" fill="#fff"/><path d="M12 6v13.5" stroke="#c2410c" stroke-width="2"/></svg>ルールを みる</button></div>
       <div class="opts">
         <div class="opt"><label>ふねの いろ</label><div class="seg" id="segColor"></div></div>
         <div class="opt"><label>コース</label><div class="seg pics" id="segLen">
@@ -96,6 +97,16 @@
       <div id="lbView"><div id="lbList"></div></div>
       <div id="lbNote"></div>
     </div>
+    </div>
+  </div>
+
+  <!-- grammar rules card -->
+  <div id="rules" class="screen hidden">
+    <div class="rulesBox">
+      <div class="rulesHead" id="rulesHead"></div>
+      <div class="rulesTabs" id="rulesTabs"></div>
+      <div class="rulesBody" id="rulesBody"></div>
+      <div class="rulesFoot"><button class="big go" id="btnRulesOk">わかった！</button></div>
     </div>
   </div>
 

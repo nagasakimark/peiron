@@ -734,7 +734,6 @@ const Scene = (() => {
     for (const [x, y, sd] of MOORED) far.push([depth(x, y), () => moored(x, y, sd)]);
     far.push([depth(-1562, -1706), megami], [depth(180, -180), ouraCathedral], [depth(40, -330), gloverHouse], [depth(300, 900), dejimaWharf]);
     far.sort((a, b) => b[0] - a[0]).forEach(([z, fn]) => { if (z > 30) fn(); });
-    drawLabels();
     const list = [...pierItems(), ...courseItems()];
     // other crews that slide right past the camera (e.g. during the turn) are skipped so they don't fill the screen
     for (const b of S.boats) { const z = depth(b.px, b.py); if (b.isPlayer || z > 9) list.push([z, () => boat(b)]); }

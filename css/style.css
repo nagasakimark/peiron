@@ -165,8 +165,9 @@ button{font-family:inherit;cursor:pointer;border:none}
 .len{display:block;height:12px;border-radius:6px;background:#9c6c38;box-shadow:0 2px 0 rgba(0,0,0,.15)}.len.s{width:44px}.len.l{width:96px}
 .seg button.on .len{background:#fff}
 .seg button.on{background:#ff7b00;color:#fff;box-shadow:0 4px 0 #c2410c}
-#segColor button{height:58px;font-size:28px;color:#fff;text-shadow:0 2px 0 rgba(0,0,0,.3);border-radius:29px}
-#segColor button.on{outline:5px solid #1d2b4f;outline-offset:2px}
+#segColor button{position:relative;height:58px;font-size:28px;color:#fff;text-shadow:0 2px 0 rgba(0,0,0,.3);border-radius:29px;background:var(--bc);box-shadow:0 5px 0 var(--bd)}
+#segColor button.on{transform:translateY(3px);box-shadow:0 2px 0 var(--bd),inset 0 0 0 4px #fff}
+#segColor button.on::after{content:"";position:absolute;right:-6px;top:-8px;width:26px;height:26px;border-radius:50%;background:#1d2b4f url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5' fill='none' stroke='white' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/18px no-repeat;border:3px solid #fff}
 .how{display:flex;align-items:center;gap:6px;background:#f3ead8;border-radius:16px;padding:8px 10px}
 .how div{flex:1;display:flex;align-items:center;gap:6px;font-weight:900;font-size:16px;white-space:nowrap;line-height:1.2;color:#6b5a44}
 .how b{flex:none;width:30px;height:30px;border-radius:50%;background:#ff7b00;color:#fff;font:800 19px/30px var(--round);text-align:center}
@@ -235,3 +236,82 @@ button{font-family:inherit;cursor:pointer;border:none}
 @keyframes lbRing{0%{opacity:1;transform:scale(.9)}100%{opacity:0;transform:scale(1.25)}}
 #lbNote{text-align:center;font-weight:900;font-size:18px;color:#7a4e26;margin-top:8px;min-height:26px}
 #lbNote.good{color:#c81d25;font-size:22px;animation:cardPop .45s ease-out}
+
+/* ---------------- grammar rules card ---------------- */
+.leftCol{display:flex;flex-direction:column;align-items:center;gap:14px}
+.rulesBtn{display:flex;align-items:center;gap:8px;height:56px;padding:0 26px;border-radius:28px;background:linear-gradient(#ffd94a,#ffb703);color:#7a3d00;
+  font-weight:900;font-size:22px;box-shadow:0 6px 0 #c98400;animation:rulesNudge 2.4s ease-in-out infinite}
+.rulesBtn svg{width:30px;height:30px;background:#ff7b00;border-radius:8px;padding:3px}
+.rulesBtn:active{transform:translateY(4px);box-shadow:0 2px 0 #c98400}
+@keyframes rulesNudge{0%,86%,100%{transform:rotate(0)}90%{transform:rotate(-3deg)}95%{transform:rotate(3deg)}}
+#rules{z-index:45;background:rgba(8,38,72,.8);justify-content:center}
+.rulesBox{width:1040px;max-height:570px;background:#fffaf0;border-radius:30px;box-shadow:0 10px 0 rgba(0,0,0,.3);overflow:hidden;display:flex;flex-direction:column;animation:cardPop .3s ease-out}
+.rulesHead{display:flex;align-items:center;gap:16px;padding:10px 24px;color:#fff}
+.rulesHead .ic{width:70px;height:70px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;flex:none}
+.rulesHead .ic .stk{width:62px;height:62px}
+.rulesHead .en{font-family:var(--en);font-weight:700;font-size:34px;line-height:1.05;text-shadow:0 2px 0 rgba(0,0,0,.25)}
+.rulesHead .jp{font-weight:900;font-size:20px}
+.rulesTabs{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;padding:8px 14px 0}
+.rulesTabs:empty{display:none}
+.rulesTabs button{height:34px;padding:0 12px;border-radius:17px;background:#efe4cf;color:#7a4e26;font-family:var(--en);font-weight:700;font-size:15px}
+.rulesTabs button.on{background:var(--c);color:#fff}
+.rulesBody{flex:1;padding:12px 28px 4px;overflow:auto;color:var(--ink)}
+.rulesBody .en{font-family:var(--en);font-weight:700}
+.rulesBody .jp{font-weight:900;color:#7a4e26}
+.rulesBody b.k{color:#d61f26;background:#ffe066;border-radius:8px;padding:0 6px;box-shadow:0 2px 0 #f2b71f}
+.rulesBody u{text-decoration:none;border-bottom:4px solid #ffb703}
+.rulesFoot{display:flex;justify-content:center;padding:6px 0 16px}
+.rTip{margin:10px 0 2px;background:#e6f2fb;color:#1d4f86;border-radius:16px;padding:10px 16px;font-weight:900;font-size:20px;text-align:center}
+.rTip b{color:#d61f26}
+/* can */
+.rRow{display:flex;align-items:center;gap:20px;background:#fff;border-radius:20px;padding:8px 16px;margin-bottom:10px;box-shadow:0 3px 0 rgba(0,0,0,.08)}
+.rPic{position:relative;width:150px;height:112px;flex:none;border-radius:16px;background:#eef6ff;overflow:hidden}
+.rPic .pic-can .act{width:100px;height:100px;margin:-50px 0 0 -50px}.rPic .pic-can .act .stk{width:100px;height:100px}
+.rPic .pic-can .stamp{width:64px;height:64px}
+.rTxt{flex:1}.rTxt .en{font-size:42px;line-height:1.1}.rTxt .jp{font-size:24px}
+.rBig{font-family:var(--en);font-weight:700;font-size:30px;padding:6px 18px;border-radius:16px;color:#fff}
+.rBig.ok{background:#e63946}.rBig.ng{background:#1d6fe0}
+/* prep */
+.rGrid4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.rTile{background:#fff;border-radius:20px;padding:8px;text-align:center;box-shadow:0 3px 0 rgba(0,0,0,.08)}
+.rPrep svg{display:block;width:100%;height:150px}
+.rTile .en{font-size:38px;margin-top:4px}.rTile .jp{font-size:24px}
+/* ans */
+.rTable{background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 3px 0 rgba(0,0,0,.08)}
+.rTr{display:grid;grid-template-columns:1.3fr 1fr 1fr;align-items:center;border-top:3px solid #f3ead8}
+.rTr > div{padding:12px 18px;font-size:32px}
+.rTr.head{border-top:none;background:#f3ead8}.rTr.head > div{font-weight:900;font-size:20px;color:#7a4e26;padding:8px 18px}
+.rTr .yes{color:#15803d}.rTr .no{color:#1d4f86}
+/* wh */
+.rGrid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.rWh{display:flex;align-items:center;gap:12px;background:#fff;border-radius:20px;padding:10px 14px;box-shadow:0 3px 0 rgba(0,0,0,.08)}
+.rWh .ic{width:80px;height:80px;flex:none}.rWh .ic .stk{width:80px;height:80px;font-size:56px}
+.rWh .en{font-size:36px;line-height:1}.rWh .jp{font-size:22px}.rWh .ex{font-family:var(--en);font-weight:700;font-size:16px;color:#5b6b82;margin-top:2px}
+/* past / a-an */
+.rCols{display:flex;align-items:stretch;justify-content:center;gap:18px}
+.rCol{flex:1;max-width:400px;background:#fff;border-radius:20px;padding:10px 18px;text-align:center;box-shadow:0 3px 0 rgba(0,0,0,.08)}
+.rCol .en{font-size:32px;line-height:1.35}
+.rColH{font-weight:900;font-size:24px;color:#fff;border-radius:14px;padding:4px 10px;margin-bottom:6px}
+.rColH small{display:block;font-family:var(--en);font-size:15px;opacity:.95}
+.rColH.now{background:#2f7fe0}.rColH.past{background:#e8457a}.rColH.an{background:#d63a3a}.rColH.s{background:#22a35a}
+.rArrow{align-self:center;font-size:60px;font-weight:900;color:#ffb703}
+.rCols.two .rCol{max-width:none}
+.rCol .small{font-size:18px;margin-top:6px}
+.rMany{display:flex;align-items:center;justify-content:center;gap:12px}
+.rMany > div:first-child{display:flex}.rMany .stk{width:58px;height:58px;font-size:44px}
+/* freq */
+.rFreq{display:flex;flex-direction:column;gap:8px}
+.rFr{display:grid;grid-template-columns:220px 220px 1fr 70px;align-items:center;background:#fff;border-radius:18px;padding:6px 18px;box-shadow:0 3px 0 rgba(0,0,0,.08)}
+.rFr .en{font-size:34px}.rFr .jp{font-size:24px}
+.rFr .days{display:flex;gap:4px}.rFr .days svg{width:40px;height:40px}
+.rFr .n{font-family:var(--round);font-weight:800;font-size:26px;color:#7a4e26;text-align:right}
+.rPastHead{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:6px}
+.rPH{display:grid;grid-template-columns:1fr 50px 1fr;align-items:center;padding:0 14px}
+.rPH span{font-weight:900;font-size:18px;color:#fff;border-radius:12px;padding:3px 8px;text-align:center;line-height:1.15}
+.rPH .ar{color:#ffb703;font-size:26px;padding:0}
+.rPH small{display:block;font-family:var(--en);font-size:12px}
+.rPastHead .now{background:#2f7fe0}.rPastHead .past{background:#e8457a}
+.rPairs{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px}
+.rPair{display:grid;grid-template-columns:1fr 50px 1fr;align-items:center;background:#fff;border-radius:16px;padding:4px 14px;box-shadow:0 3px 0 rgba(0,0,0,.08);text-align:center}
+.rPair .en{font-size:36px}.rPair .now{color:#1d4f86}.rPair .ar{font-size:30px;font-weight:900;color:#ffb703}
+.rFr{padding:3px 18px}.rFreq{gap:6px}

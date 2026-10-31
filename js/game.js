@@ -188,11 +188,63 @@
     idleRace(); dockIdle();
   }
   function show(id) { ['title', 'setup', 'results'].forEach(s => $(s).classList.toggle('hidden', s !== id)); }
+  /* ---------- grammar rules cards (shown from the setup screen) ---------- */
+  const B = w => `<b class="k">${w}</b>`;                      // the key word, highlighted
+  const RULES = {
+    can: () => `
+      <div class="rRow"><div class="rPic">${renderPic({ type: 'can', img: 'cook', ok: true })}</div>
+        <div class="rTxt"><div class="en">I ${B('can')} cook.</div><div class="jp">りょうりが <u>できる</u></div></div><div class="rBig ok">◯ → can</div></div>
+      <div class="rRow"><div class="rPic">${renderPic({ type: 'can', img: 'cook', ok: false })}</div>
+        <div class="rTxt"><div class="en">I ${B("can't")} cook.</div><div class="jp">りょうりが <u>できない</u></div></div><div class="rBig ng">✕ → can't</div></div>
+      <div class="rTip">◯ の えは <b>can</b>（できる）、✕ の えは <b>can't</b>（できない）！</div>`,
+    prep: () => `<div class="rGrid4">${[['in', 'box', 'なかに'], ['on', 'desk', 'うえに'], ['under', 'desk', 'したに'], ['by', 'box', 'そばに']].map(([p, pl, jp]) =>
+      `<div class="rTile"><div class="rPrep">${prepSVG('cat', pl, p)}</div><div class="en">${B(p)}</div><div class="jp">${jp}</div></div>`).join('')}</div>
+      <div class="rTip">The cat is ${B('in')} the box. = ねこは はこの <u>なかに</u> いる</div>`,
+    ans: () => `<div class="rTable">
+      <div class="rTr head"><div>しつもんの さいしょ</div><div>はい</div><div>いいえ</div></div>
+      ${[['Can', 'you swim?', 'Yes, I can.', "No, I can't."], ['Do', 'you like dogs?', 'Yes, I do.', "No, I don't."], ['Are', 'you hungry?', 'Yes, I am.', "No, I'm not."]].map(([w, r, y, n]) =>
+        `<div class="rTr"><div class="en">${B(w)} ${r}</div><div class="en yes">${y.replace(/(can|do|am)\./, m => B(m.slice(0, -1)) + '.')}</div><div class="en no">${n.replace(/(can't|don't|not)\./, m => B(m.slice(0, -1)) + '.')}</div></div>`).join('')}</div>
+      <div class="rTip">しつもんの <b>さいしょの ことば</b>を つかって こたえよう！（Can → can、Do → do、Are → am）</div>`,
+    wh: () => `<div class="rGrid3">${[['What', 'なに？', 'gift', 'What do you want?'], ['Where', 'どこ？', 'map', 'Where is the park?'], ['When', 'いつ？', 'cake', 'When is your birthday?'],
+      ['Who', 'だれ？', 'p_he', 'Who is this?'], ['Why', 'なぜ？', 'lake', 'Why do you want to go?'], ['How', 'どう？・いくつ？', 'apple3', 'How many apples?']].map(([w, jp, img, ex]) =>
+      `<div class="rWh"><div class="ic">${stk(img)}</div><div><div class="en">${B(w)}</div><div class="jp">${jp}</div><div class="ex">${ex.replace(w, `<b>${w}</b>`)}</div></div></div>`).join('')}</div>
+      <div class="rTip">こたえを みて、なにを きいているか かんがえよう！（ばしょ → Where、とき → When、ひと → Who）</div>`,
+    past: () => `<div class="rPastHead"><div class="rPH"><span class="now">いつも・いま<small>Every day / Today</small></span><span class="ar">→</span><span class="past">きのう・まえ<small>Yesterday / Last ~</small></span></div><div class="rPH"><span class="now">いつも・いま<small>Every day / Today</small></span><span class="ar">→</span><span class="past">きのう・まえ<small>Yesterday / Last ~</small></span></div></div>
+      <div class="rPairs">${[['go', 'went'], ['eat', 'ate'], ['see', 'saw'], ['play', 'play<b class="k">ed</b>'], ['watch', 'watch<b class="k">ed</b>'], ['is', 'was']].map(([n, p]) =>
+        `<div class="rPair"><span class="en now">${n}</span><span class="ar">→</span><span class="en past">${p.includes('<b') ? p : B(p)}</span></div>`).join('')}</div>
+      <div class="rTip"><b>Yesterday</b>・<b>Last ~</b> が あったら、かたちが かわる！ <b>-ed</b> が つく ことばも あるよ。</div>`,
+    freq: () => `<div class="rFreq">${[['always', 'いつも', 7], ['usually', 'たいてい', 5], ['sometimes', 'ときどき', 2], ['never', 'ぜんぜん しない', 0]].map(([w, jp, n]) =>
+      `<div class="rFr"><div class="en">${B(w)}</div><div class="jp">${jp}</div><div class="days">${Array.from({ length: 7 }, (_, i) => i < n ? HANKO : EMPTY).join('')}</div><div class="n">${n}/7</div></div>`).join('')}</div>
+      <div class="rTip">1しゅうかんで なんかい する？ ◯ の かずで えらぼう！</div>`,
+    aan: () => `<div class="rCols two">
+      <div class="rCol"><div class="rColH an">a と an</div>
+        <div class="en">${B('an')} <u>a</u>pple</div><div class="en">${B('an')} <u>e</u>gg</div><div class="en">${B('an')} <u>o</u>range</div>
+        <div class="en">${B('a')} banana</div><div class="en">${B('a')} cat</div>
+        <div class="jp small">a・i・u・e・o の おとで はじまる ことばは <b>an</b>！</div></div>
+      <div class="rCol"><div class="rColH s">ひとつ？ たくさん？</div>
+        <div class="rMany"><div>${stk('apple')}</div><div class="en">one apple</div></div>
+        <div class="rMany"><div>${stk('apple')}${stk('apple')}${stk('apple')}</div><div class="en">three apple${B('s')}</div></div>
+        <div class="jp small">2つ いじょうは <b>-s</b> を つける！</div></div></div>`,
+  };
+  const RULE_SETS = () => QUESTION_SETS.filter(s => RULES[s.id]);
+  function showRules(id) {
+    const all = RULE_SETS(), list = cfg.set.id === 'mix' ? all : all.filter(s => s.id === cfg.set.id);
+    const cur = list.find(s => s.id === id) || list[0]; if (!cur) return;
+    $('rulesHead').innerHTML = `<div class="ic">${stk(cur.icon)}</div><div><div class="en">${esc(cur.en)}</div><div class="jp">${cur.jp}</div></div>`;
+    $('rulesHead').style.background = cur.color;
+    $('rulesTabs').innerHTML = list.length > 1 ? list.map(s => `<button data-id="${s.id}" class="${s.id === cur.id ? 'on' : ''}" style="--c:${s.color}">${esc(s.en)}</button>`).join('') : '';
+    $('rulesTabs').querySelectorAll('button').forEach(b => b.onclick = () => { sfx('click', 0.3); showRules(b.dataset.id); });
+    $('rulesBody').innerHTML = RULES[cur.id]();
+    $('rules').classList.remove('hidden');
+  }
+  $('btnRules').onclick = () => { ac(); sfx('click', 0.3); showRules(); };
+  $('btnRulesOk').onclick = () => { sfx('click', 0.3); $('rules').classList.add('hidden'); };
+
   function showSetup() {
     state = 'setup'; show('setup');
     $('setupMode').innerHTML = modeCard(cfg.set, 'div');
     $('nameIn').value = cfg.name;
-    $('segColor').innerHTML = COLORS.map(c => `<button data-v="${c.key}" style="background:${c.color};box-shadow:0 4px 0 ${c.dark}" class="${c.key === cfg.color ? 'on' : ''}">${c.kanji}</button>`).join('');
+    $('segColor').innerHTML = COLORS.map(c => `<button data-v="${c.key}" style="--bc:${c.color};--bd:${c.dark}" class="${c.key === cfg.color ? 'on' : ''}">${c.kanji}</button>`).join('');
     seg('segColor', v => { cfg.color = v; store.set('color', v); idleRace(); });
     // preload this set's pictures
     const sets = cfg.set.id === 'mix' ? QUESTION_SETS : [cfg.set], ids = new Set();
