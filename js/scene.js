@@ -521,11 +521,12 @@ const Scene = (() => {
   }
   function rower(K, b, t, sd, ph, bob, parts, low, idx) {
     const z = t * L, gH = hullH(t), hw = hullW(t), seat = gH - 0.13 + bob, lf = Math.cos(ph), sn = Math.sin(ph);
-    const x = sd * Math.min(0.3, hw * 0.5), plen = 1.25 + Math.abs(t - 0.45) * 0.7, dip = Math.max(-1, Math.min(1, sn * 2.6));
-    const tip = [sd * (hw + 0.26), dip > 0 ? -0.3 * dip : 0.1 + 0.3 * -dip, z + 0.1 + 0.72 * lf];
-    const dir = vN(vS([sd * 0.1, seat + 1.05 + 0.06 * lf, z + 0.05 + 0.42 * lf], tip)), top = vA(tip, vM(dir, plen));
-    const lowH = vA(tip, vM(dir, plen * 0.52)), hands = sd > 0 ? [top, lowH] : [lowH, top];
-    const ug = top[1] > gH && tip[1] < gH ? (top[1] - gH) / (top[1] - tip[1]) : (tip[1] >= gH ? 1 : 0);
+    const x = sd * Math.min(0.3, hw * 0.5), plen = 1.7 + Math.abs(t - 0.45) * 0.7, dip = Math.max(-1, Math.min(1, sn * 2.6)), lift = Math.max(0, -dip);
+    // the paddle always passes over a point just outside the gunwale, so it can never cut through the hull
+    const top = [sd * 0.2, gH + 0.55 + 0.16 * lift + bob, z + 0.05 + 0.45 * lf];
+    const pv = [sd * (hw + 0.06), gH + 0.04 + 0.14 * lift + bob, z + 0.12 + 0.62 * lf];
+    const dP = vS(pv, top), lP = Math.hypot(dP[0], dP[1], dP[2]), tip = vA(top, vM(dP, plen / lP));
+    const lowH = vLerp(top, pv, 0.8), hands = sd > 0 ? [top, lowH] : [lowH, top], ug = Math.min(1, lP / plen);
     const spl = sn > 0 && lf > 0.3 ? Math.min(1, (1 - sn) * 1.6) * (0.5 + Math.min(0.5, b.v / 20)) : 0, seed = idx * 7 + sd;
     figure(K, { hip: [x, seat, z], lean: 0.16 + 0.34 * (lf * 0.5 + 0.5), twist: 0.08 * lf * sd, spine: 0.54, shirt: b.color, crest: b.dark, kanji: b.kanji,
       hair: (idx * 2 + (sd > 0 ? 1 : 0)) % 3, hands, shout: lf > 0.5 && sn > -0.2, spd: b.v, band: b.color,
@@ -609,9 +610,13 @@ const Scene = (() => {
       extra: [[bk, () => { const r1 = [], r2 = []; for (let i = 0; i < 8; i++) { const a = i / 8 * 6.283; r1.push(Bv([bk[0] + Math.cos(a) * 0.12, bk[1] + 0.1, bk[2] + Math.sin(a) * 0.12])); r2.push(Bv([bk[0] + Math.cos(a) * 0.09, bk[1] - 0.1, bk[2] + Math.sin(a) * 0.09])); }
         const h = hull2(r1.concat(r2)); if (h.length > 2) inkFill(h, '#4f86c6', Math.max(1, (r1[0] || { s: 20 }).s * 0.03)); }]] }, parts);
     // 舵取り standing on the stern deck with the long steering oar
-    const tR = 0.07, dR = hullH(tR) - 0.33 + bob, oT = [0.5, dR + 1.0, tR * L - 0.35], oE = [1.0, -0.3, -2.6];
-    stander(K, b, 0.24, tR, bob, { shirt: b.dark, crest: b.color, hair: 0, yaw: 0.3, lean: 0.32, crouch: 0.5, hands: [vLerp(oT, oE, 0.04), vLerp(oT, oE, 0.2)],
-      extra: [[vLerp(oT, oE, 0.35), () => shaft(K, oT, oE, 0, 1, { ub: 0.78, bw: 0.1, w: 0.06, splash: 0, bx: [0, 1, 0] })]] }, parts);
+    // the oar rests on the starboard stern quarter: handle in front of the steersman, blade trailing behind the boat
+    const tR = 0.07, dR = hullH(tR) - 0.33 + bob, sweep = Math.sin(S.time * 0.7 + b.lane) * 0.12;
+    const oP = [hullW(0.02) + 0.04, hullH(0.02) + 0.1 + bob, 0.02 * L], oE = [1.1 + sweep, -0.3, -2.8];
+    const oD = vS(oP, oE), oL = Math.hypot(oD[0], oD[1], oD[2]), oT = vA(oP, vM(oD, 1.2 / oL)), oU = 1.2 / (1.2 + oL);
+    stander(K, b, -0.1, tR, bob, { shirt: b.dark, crest: b.color, hair: 0, yaw: 0.3, lean: 0.25, crouch: 0.5, hands: [oT, vLerp(oT, oP, 0.3)],
+      extra: [[vLerp(oT, oP, 0.5), () => shaft(K, oT, oE, 0, oU, { ub: 0.78, w: 0.06 })]] }, parts);
+    low[1].push(() => shaft(K, oT, oE, oU, 1, { ub: 0.78, bw: 0.1, w: 0.06, splash: 0, bx: [0, 1, 0] }));
 
     // draw order: far side of the hull, far paddles, inside, crew (by depth), near side, near paddles
     plank(-near); if (!behind) transom();
