@@ -5,11 +5,11 @@ Grammar from **Let's Try 1・2** and **New Horizon Elementary 5・6 (2024)**.
 
 Play: open `index.html` (works by double-click too, or on GitHub Pages).
 
-## The race course is real
-The 長崎ペーロン選手権大会 is held off **Matsugae pier (松が枝)** in Nagasaki Harbour, and crews race out, turn round a buoy and come back.
-- **Leg 1, heading north:** いなさやま (with its TV towers) ahead-left, こんぴらさん ahead, the World Heritage giant cantilever crane on the left shore, ながさきえき and でじまワーフ on the right.
-- **Turn:** the crews turn round the buoys (ターン！).
-- **Leg 2, heading south:** めがみおおはし ahead, おおうらてんしゅどう and グラバーえん on the hill to the left, the shipyard cranes on the right, and the goal at the pier with a cruise ship and the crowd.
+## The race course is real (see AUTHENTICITY.md)
+The 長崎ペーロン選手権大会 starts in front of **Matsugae pier (松が枝)**. Crews race out into the harbour, round a buoy and come back. Every landmark is placed from real map coordinates, so it moves and grows as you row.
+- **Out (heading west):** the Mitsubishi shipyard ahead, with the World Heritage giant cantilever crane and いなさやま (with its TV towers) ahead-right.
+- **Turn:** each crew pivots round its own buoy, and めがみおおはし swings past.
+- **Back (heading east):** the pier ahead, with the stand, the tents and the crowd on the terminal roof. おおうらてんしゅどう, グラバーえん and なべかんむりやま are on the right, でじまワーフ and the city on the left.
 
 ## Game sets
 | Set | Grammar | Textbook |
@@ -26,10 +26,12 @@ The 長崎ペーロン選手権大会 is held off **Matsugae pier (松が枝)** 
 ## How it plays
 - Every boat rows all the time. A right answer gives a burst of speed that fades, and **3 right in a row = BOOST** (an even bigger burst).
 - A wrong answer makes the crew stumble and slow down for a moment, but the boat never stops.
-- Course lengths: みじかい about 1 minute, ふつう about 1½ minutes, ながい about 2 minutes.
+- Course: **ほんばん** is the real 1,150 m (630 m out, 520 m back), about 2 minutes. **れんしゅう** is a half-size course, about 1 minute.
+- The turn: each crew pivots round its own buoy, and right answers during the turn give a ナイスターン (a faster swing).
+- Rough win rates on ふつう: a typical student (about 3½ s per answer, 80% right) wins about half the time; on やさしい, slower students win often.
 - After every answer, a native voice reads the full sentence.
 - A wrong answer comes back again 3 questions later, and the results screen lists every missed sentence with a 🔊 button.
-- Teams type their team name onto their boat and pick its colour. Their best place for each set is saved on that computer.
+- Teams type their team name (or pick their district from the list) and choose a boat colour. Computer crews are named after Nagasaki districts and never share the player's name. Their best place for each set is saved on that computer.
 - Settings: race length (みじかい・ふつう・ながい) and how strong the CPU boats are (やさしい・ふつう・つよい).
 - Keyboard: `1` / `2` or `←` / `→`.
 

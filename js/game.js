@@ -78,6 +78,10 @@
     if (!AC || !BUF[name]) return null; const s = AC.createBufferSource(), g = AC.createGain();
     s.buffer = BUF[name]; s.playbackRate.value = rate; g.gain.value = vol; s.connect(g).connect(master); s.start(); return { s, g };
   }
+  function sfxCut(name, vol, dur, rate = 1) {
+    const h = sfx(name, vol, rate); if (!h) return; const t = AC.currentTime;
+    h.g.gain.setValueAtTime(vol, t + dur * 0.6); h.g.gain.linearRampToValueAtTime(0.0001, t + dur); h.s.stop(t + dur + 0.05);
+  }
   function crowd(on) {
     if (on && !crowdSrc && BUF.crowd) { crowdSrc = sfx('crowd', 0.18); if (crowdSrc) crowdSrc.s.loop = true; }
     if (!on && crowdSrc) { try { crowdSrc.s.stop(); } catch (e) { } crowdSrc = null; }
@@ -96,20 +100,31 @@
 
   /* ---------- teams ---------- */
   const COLORS = [
-    { key: 'red', color: '#e23b3b', dark: '#8e1c1c', kanji: '赤', cpu: 'Dejima' },
-    { key: 'blue', color: '#2f6fe0', dark: '#1a3f88', kanji: '青', cpu: 'Oura' },
-    { key: 'yellow', color: '#f2b71f', dark: '#9a6f05', kanji: '黄', cpu: 'Inasa' },
-    { key: 'green', color: '#22a35a', dark: '#13643a', kanji: '緑', cpu: 'Tomachi' }];
-  const CPU = [{ int: 5.6, acc: 0.72 }, { int: 4.4, acc: 0.82 }, { int: 3.3, acc: 0.9 }];
+    { key: 'red', color: '#e23b3b', dark: '#8e1c1c', kanji: '赤' },
+    { key: 'blue', color: '#2f6fe0', dark: '#1a3f88', kanji: '青' },
+    { key: 'yellow', color: '#f2b71f', dark: '#9a6f05', kanji: '黄' },
+    { key: 'green', color: '#22a35a', dark: '#13643a', kanji: '緑' }];
+  // Computer crews are named after Nagasaki districts that row peiron. Never the same as the player's team.
+  const DISTRICTS = [['野母崎', 'のもざき', 'nomozaki'], ['深堀', 'ふかほり', 'fukahori'], ['戸町', 'とまち', 'tomachi'], ['香焼', 'こうやぎ', 'koyagi'],
+    ['小ヶ倉', 'こがくら', 'kogakura'], ['福田', 'ふくだ', 'fukuda'], ['三重', 'みえ', 'mie'], ['牧島', 'まきしま', 'makishima'], ['式見', 'しきみ', 'shikimi'], ['小榊', 'こさかき', 'kosakaki']];
+  const norm = t => String(t || '').toLowerCase().replace(/[\s・ー\-_.]/g, '');
+  function clashes(d, name) { const n = norm(name); if (n.length < 2) return false; return d.some(v => { const m = norm(v); return n.includes(m) || m.includes(n); }); }
+  function cpuNames() { return shuffle(DISTRICTS.filter(d => !clashes(d, cfg.name))).slice(0, 3).map(d => d[0]); }
+  const FACTS = ['ペーロンは 1655ねんに ながさきで はじまったよ。', 'ペーロンの なまえは ちゅうごくごの「白龍（パイロン）」から。',
+    'ふねの ながさは 13.6m。のるのは 30にん まで！', 'こぎては 26にん。たいこ・ドラ・かじとり・あかくみ も のるよ。',
+    'コースは いき 630m、かえり 520m。ぜんぶで 1150m！', 'かけごえは「ヨーイサー！」', 'おはやしは「ドーン、ドン、ジャーン、ジャン！」',
+    'ターンブイを まわる ところで しょうぶが きまることが おおいよ。', '2023ねんは 野母崎が 4ふん53びょう98で ゆうしょう！', 'ふねは すぎの き で できているよ。', 'まつがえの ターミナルの やねからも レースが みられるよ。'];
+  const fact = () => 'まめちしき：' + pick(FACTS);
+  const CPU = [{ int: 7.6, acc: 0.7 }, { int: 5.9, acc: 0.78 }, { int: 4.2, acc: 0.88 }];   // seconds per answer, accuracy
   // Rowing model: every boat always rows at BASE speed. Right answers add a speed boost that fades away;
   // 3 in a row adds a bigger BOOST. A wrong answer makes the crew stumble for a moment (they never stop).
-  const BASE = 5, KICK = 9, COMBO_KICK = 5, MAX_EXTRA = 20, FADE = 1.8;
+  const BASE = 5, KICK = 9, COMBO_KICK = 5, MAX_EXTRA = 26, FADE = 2.4, TURN_T = [3.6, 3.2, 2.8];
   function kick(r, combo) { r.extra = Math.min(MAX_EXTRA, r.extra + KICK + (combo ? COMBO_KICK : 0)); r.boost = combo ? 2.6 : 0; }
-  function stumble(r) { r.extra = 0; r.boost = 0; r.stumble = 1.3; }
+  function stumble(r) { r.extra *= 0.4; r.boost = 0; r.stumble = 1.0; }
 
   /* ---------- state ---------- */
-  const cfg = { set: null, len: 1000, cpu: 1, color: store.get('color', 'red'), name: store.get('name', '') };
-  let state = 'title', racers = [], player = null, trackLen = 0, turned = false;
+  const cfg = { set: null, len: 1, cpu: 1, color: store.get('color', 'red'), name: store.get('name', '') };
+  let state = 'title', racers = [], player = null, trackLen = 0;
   let q = null, locked = true, qCount = 0, answered = 0, correctN = 0, streak = 0, missed = [], raceT = 0, deck = null, endT = 0, countT = 0, lastCount = 4;
 
   /* ---------- question deck: shuffled bag + wrong answers come back ---------- */
@@ -149,7 +164,7 @@
   function showSetup() {
     state = 'setup'; show('setup');
     $('setupMode').innerHTML = modeCard(cfg.set, 'div');
-    $('nameIn').value = cfg.name;
+    $('nameIn').value = cfg.name; $('factSetup').textContent = fact();
     $('segColor').innerHTML = COLORS.map(c => `<button data-v="${c.key}" style="background:${c.color};box-shadow:0 4px 0 ${c.dark}" class="${c.key === cfg.color ? 'on' : ''}">${c.kanji}</button>`).join('');
     seg('segColor', v => { cfg.color = v; store.set('color', v); idleRace(); });
     // preload this set's pictures
@@ -176,28 +191,30 @@
     const me = COLORS.find(c => c.key === cfg.color) || COLORS[0];
     const others = COLORS.filter(c => c !== me);
     const lanes = [others[0], me, others[1], others[2]];
-    racers = lanes.map((c, i) => ({ ...c, lane: i, x: Scene.LANES[i], z: 0, v: 0, extra: 0, stumble: 0, phase: rnd() * 6, cyc: 0, boost: 0, streak: 0,
-      isPlayer: c === me, name: c === me ? (cfg.name || 'MY TEAM') : c.cpu, aiT: 1.5 + rnd() * 1.5, finished: false, finishT: 0 }));
+    const names = cpuNames(); let n = 0;
+    racers = lanes.map((c, i) => Scene.Course.pose({ ...c, lane: i, leg: 1, a: 0, phi: 0, v: 0, extra: 0, stumble: 0, nice: 0, phase: rnd() * 6, cyc: 0, beat: 0, boost: 0, streak: 0,
+      isPlayer: c === me, name: c === me ? (cfg.name || 'MY TEAM') : names[n++], aiT: 1.5 + rnd() * 1.5, finished: false, finishT: 0 }));
     player = racers.find(r => r.isPlayer);
   }
   function idleRace() {
-    buildRacers(); trackLen = cfg.len;
-    Scene.setRace({ boats: racers, turnZ: trackLen / 2, finishZ: trackLen + Scene.BOAT_L });
+    Scene.Course.setup(cfg.len); trackLen = Scene.Course.total; buildRacers();
+    Scene.setRace({ boats: racers });
   }
 
   /* ---------- race flow ---------- */
   function startRace() {
     ac(); stopVoice(); sfx('click', 0.6);
     $('nameIn').blur();
-    idleRace(); turned = false;
+    idleRace();
     q = null; locked = true; qCount = 0; answered = 0; correctN = 0; streak = 0; missed = []; raceT = 0; endT = 0;
     deck = makeDeck(cfg.set);
     show(null); $('hud').classList.remove('hidden'); $('btnHome').classList.remove('hidden');
     $('setup').classList.add('hidden'); $('results').classList.add('hidden');
     document.documentElement.style.setProperty('--setc', cfg.set.color);
-    dockIdle('よーい…'); updateCombo();
-    state = 'countdown'; countT = 3.2; lastCount = 4; crowd(true);
-    say('Ready?');
+    dockIdle('よーい…'); updateCombo(); $('dist').textContent = `あと ${Math.round(trackLen)}m`;
+    $('trackTurn').style.left = (Scene.Course.out / trackLen * 100) + '%';
+    state = 'countdown'; countT = 2.6; lastCount = 4; crowd(true); Scene.showLabels();
+    banner('よーい…'); sfx('taiko', 0.6);
   }
   function banner(html, cls = '') { const b = $('banner'); b.className = ''; b.innerHTML = html; void b.offsetWidth; b.className = 'show ' + cls; }
   function popup(text, cls = '', b = player) {
@@ -205,7 +222,7 @@
     el.style.left = (p ? Math.max(120, Math.min(1160, p.x)) : 640) + 'px'; el.style.top = (p ? Math.max(70, p.y - 10) : 180) + 'px';
     $('popups').appendChild(el); setTimeout(() => el.remove(), 1200);
   }
-  function go() { state = 'race'; banner('GO!<small>こげ！</small>'); sfx('gong', 0.8); say('Go!'); nextQ(); }
+  function go() { state = 'race'; banner('ドン！<small>こげ！ ヨーイサー！</small>'); sfx('taiko2', 1); sfx('gong', 0.8); nextQ(); }
 
   function dockIdle(msg) {
     $('card').innerHTML = `<div class="pic-one">${stk('peiron')}</div>`;
@@ -245,12 +262,13 @@
     if (ok) {
       correctN++; streak++;
       const boosted = streak >= 3; kick(player, boosted);
+      if (player.leg === 'turn') { player.nice = 1.6; popup('ナイスターン！', 'gold'); }
       sfx('correct', 0.55); sfx('taiko2', 0.9);
       Scene.splash(player, 14, 1.2, boosted);
-      if (boosted) { sfx('boost', 0.6); Scene.shake(0.6); popup(streak === 3 ? 'BOOST!' : streak + ' COMBO!', 'gold'); }
-      else popup(pick(['Nice!', 'Great!', 'Good!', 'Yes!', 'いいね！']));
+      if (player.leg !== 'turn') { if (boosted) { sfx('boost', 0.6); Scene.shake(0.6); popup(streak === 3 ? 'ヨーイサー！' : streak + ' れんぞく！', 'gold'); }
+        else popup(pick(['Nice!', 'Great!', 'Good!', 'Yes!', 'いいね！'])); }
     } else {
-      streak = 0; stumble(player); missed.push(q); deck.again(q, qCount);
+      streak = 0; stumble(player); missed.push(q); deck.again(q, qCount); if (player.leg === 'turn') player.nice = -1.2;
       sfx('wrong', 0.6); Scene.splash(player, 26, 0.6); popup('ざんねん…', 'bad');
     }
     updateCombo();
@@ -273,7 +291,9 @@
     const pips = document.querySelectorAll('#combo span'); pips.forEach((p, k) => p.classList.toggle('on', k < Math.min(streak, 3)));
     $('combo').classList.toggle('boost', streak >= 3);
   }
-  function ranking() { return racers.slice().sort((a, b) => (a.finished && b.finished) ? a.finishT - b.finishT : a.finished ? -1 : b.finished ? 1 : b.z - a.z); }
+  const prog = r => Scene.Course.progress(r);
+  function ranking() { return racers.slice().sort((a, b) => (a.finished && b.finished) ? a.finishT - b.finishT : a.finished ? -1 : b.finished ? 1 : prog(b) - prog(a)); }
+  const fmtT = t => `${Math.floor(t / 60)}:${(t % 60).toFixed(2).padStart(5, '0')}`;
 
   /* ---------- results ---------- */
   function showResults() {
@@ -286,10 +306,12 @@
     const head = ['🥇 1st place!', '🥈 2nd place!', '🥉 3rd place!', '4th place'][place - 1];
     const jp = ['やったね！ 1いだ！', 'すごい！ 2い！', 'がんばった！ 3い！', 'つぎは がんばろう！'][place - 1];
     $('resHead').innerHTML = `${head}<small>${jp}</small>`;
-    const heights = [112, 92, 76, 64], podOrder = [1, 0, 2, 3];
+    const heights = [122, 106, 94, 86], podOrder = [1, 0, 2, 3];
     $('podium').innerHTML = podOrder.map(k => { const r = order[k]; if (!r) return '';
-      return `<div class="pod ${r.isPlayer ? 'me' : ''}" style="height:${heights[k]}px;background:${r.color}"><b>${ord(k + 1)}</b><span>${esc(r.name)}</span></div>`; }).join('');
-    $('resStats').innerHTML = `せいかい ${correctN} / ${answered}（${acc}%） ・ タイム ${player.finishT.toFixed(1)}びょう${isBest ? '<span class="best">ベスト！</span>' : ''}`;
+      return `<div class="pod ${r.isPlayer ? 'me' : ''}" style="height:${heights[k]}px;background:${r.color}"><b>${ord(k + 1)}</b><span>${esc(r.name)}</span>${r.finished ? `<em>${fmtT(r.finishT)}</em>` : ''}</div>`; }).join('');
+    const gap = place === 1 ? (order[1] && order[1].finished ? ` ・ 2いと ${(order[1].finishT - player.finishT).toFixed(2)}びょう さ` : '') : (order[0].finished ? ` ・ 1いと ${(player.finishT - order[0].finishT).toFixed(2)}びょう さ` : '');
+    $('resStats').innerHTML = `せいかい ${correctN} / ${answered}（${acc}%） ・ タイム ${fmtT(player.finishT)}${gap}${isBest ? '<span class="best">ベスト！</span>' : ''}`;
+    $('factRes').textContent = fact();
     const seen = new Set(), list = missed.filter(m => !seen.has(m.say) && seen.add(m.say));
     $('review').innerHTML = list.length ? list.map((m, k) => {
       const full = (m.top ? esc(m.top) + ' ' : '') + esc(m.pre) + `<b>${esc(m.correct)}</b>` + esc(m.post) + (m.bot ? ' ' + esc(m.bot) : '');
@@ -312,35 +334,47 @@
 
   /* ---------- main loop ---------- */
   function update(dt) {
-    if (state === 'countdown') {
-      countT -= dt; const n = Math.ceil(countT - 0.2);
-      if (n < lastCount && n > 0 && n <= 3) { lastCount = n; banner(String(n)); sfx('taiko', 1); }
-      if (countT <= 0) go();
-    }
-    const racing = state === 'race';
+    if (state === 'countdown') { countT -= dt; if (countT <= 0) go(); }
+    const racing = state === 'race', C = Scene.Course;
     if (racing) raceT += dt;
     for (const r of racers) {
       if (racing && !r.isPlayer && !r.finished) {
         r.aiT -= dt;
         if (r.aiT <= 0) { const d = CPU[cfg.cpu];
-          if (rnd() < d.acc) { r.streak++; kick(r, r.streak >= 3); } else { r.streak = 0; stumble(r); }
-          const ahead = r.z - player.z;   // keep the race close and exciting
-          r.aiT = d.int * (0.75 + rnd() * 0.55) * (ahead > 60 ? 1.35 : ahead < -60 ? 0.8 : 1); }
+          if (rnd() < d.acc) { r.streak++; kick(r, r.streak >= 3); if (r.leg === 'turn') r.nice = 1.6; } else { r.streak = 0; stumble(r); }
+          const ahead = prog(r) - prog(player);   // keep the race close and exciting
+          r.aiT = d.int * (0.75 + rnd() * 0.55) * (ahead > 35 ? 1.4 : ahead > 15 ? 1.15 : ahead < -45 ? 0.85 : 1); }
       }
       r.boost = Math.max(0, r.boost - dt); r.stumble = Math.max(0, r.stumble - dt);
       r.extra = Math.max(0, r.extra - FADE * dt);
-      let want = r.finished ? 5 : (BASE * (r.stumble > 0 ? 0.4 : 1) + r.extra);
+      let want = r.finished ? 4 : (BASE * (r.stumble > 0 ? 0.4 : 1) + r.extra);
+      if (r.leg === 'turn') want = 2.2;                       // the long boat almost stops while it pivots
       if (!racing && state !== 'results') want = 0;
-      r.v += (want - r.v) * Math.min(1, dt * 2.4); r.z += r.v * dt;
+      r.v += (want - r.v) * Math.min(1, dt * 2.4);
+      if (racing || state === 'results') {
+        if (r.leg === 1) { r.a += r.v * dt; if (r.a >= C.out) { r.leg = 'turn'; r.phi = 0; r.nice = 0;
+            if (r.isPlayer) { banner('ターン！<small>ブイを まわれ！</small>'); sfx('whoosh', 0.7); sfx('cheer', 0.35); Scene.showLabels(); } } }
+        else if (r.leg === 'turn') {
+          const base = Math.PI / (r.isPlayer ? 3.2 : TURN_T[2 - cfg.cpu] * (0.9 + rnd() * 0.2));
+          const k = r.nice > 0 ? 1.9 : r.nice < 0 ? 0.55 : 1; r.nice = r.nice > 0 ? Math.max(0, r.nice - dt) : Math.min(0, r.nice + dt);
+          r.phi += base * k * dt;
+          if (r.phi >= Math.PI) { r.phi = Math.PI; r.leg = 2; r.a = 0; r.v = Math.max(r.v, 3); if (r.isPlayer) { popup('ヨーイサー！', 'gold'); Scene.showLabels(); } } }
+        else r.a += r.v * dt;
+      }
+      Scene.Course.pose(r);
       r.phase += dt * ((state === 'title' || state === 'setup' || state === 'countdown') ? 0.8 : 1.6 + r.v * 0.42);
-      const cyc = Math.floor(r.phase / (Math.PI * 2));
-      if (cyc !== r.cyc) { r.cyc = cyc; if (r.v > 1.5) { Scene.splash(r, 5); if (r.isPlayer) { sfx('taiko', 0.25 + Math.min(0.35, r.v / 50)); if (cyc % 4 === 0) sfx('gong', 0.12); } } }
-      if (racing && !r.finished && r.z >= trackLen) {
+      // 「ドーン、ドン、ジャーン、ジャン！」 — four beats per paddle stroke
+      const beat = Math.floor(r.phase / (Math.PI / 2));
+      if (beat !== r.beat) { r.beat = beat;
+        if (r.v > 1.5 && beat % 4 === 0) Scene.splash(r, 5);
+        if (r.isPlayer && r.v > 1.2 && racing) { const b = beat % 4, loud = Math.min(1, 0.55 + r.v / 30);
+          if (b === 0) sfx('taiko', 0.55 * loud); else if (b === 1) sfx('taiko', 0.3 * loud, 1.08);
+          else if (b === 2) sfxCut('gong', 0.2 * loud, 0.45); else sfxCut('gong', 0.12 * loud, 0.18, 1.05); } }
+      if (racing && !r.finished && prog(r) >= trackLen) {
         r.finished = true; r.finishT = raceT;
-        if (r.isPlayer) { const pl = ranking().indexOf(r) + 1; banner(`GOAL!<small>${pl}い ゴール！</small>`); sfx('cheer', 0.7); sfx('gong', 0.8); say('Goal!'); endT = 2.6; }
+        if (r.isPlayer) { const pl = ranking().indexOf(r) + 1; banner(`ゴール！<small>${pl}い！</small>`); sfx('cheer', 0.7); sfx('gong', 0.8); say('Goal!'); endT = 2.6; }
       }
     }
-    if (racing && !turned && player.z >= trackLen / 2) { turned = true; Scene.startTurn(); banner('TURN!<small>ターン！</small>'); sfx('whoosh', 0.8); sfx('cheer', 0.35); }
     if (racing && player.finished) { endT -= dt; if (endT <= 0) showResults(); }
     Scene.update(dt, player, { idle: state === 'title' || state === 'setup' });
     if (racing || state === 'countdown') hud();
@@ -350,10 +384,12 @@
     if (pos.dataset.p != pl) { pos.dataset.p = pl; pos.className = 'p' + pl; pos.innerHTML = `<b>${pl}</b><i>${['th', 'st', 'nd', 'rd'][pl] || 'th'}</i>`; }
     const tb = $('trackBoats');
     if (tb.children.length !== racers.length) tb.innerHTML = racers.map(r => `<div class="${r.isPlayer ? 'me' : ''}" style="background:${r.color}"></div>`).join('');
-    racers.forEach((r, k) => tb.children[k].style.left = (Math.min(1, r.z / trackLen) * 100) + '%');
+    racers.forEach((r, k) => tb.children[k].style.left = (Math.min(1, prog(r) / trackLen) * 100) + '%');
+    $('dist').textContent = player.finished ? 'ゴール！' : `あと ${Math.max(0, Math.round(trackLen - prog(player)))}m`;
   }
   let last = performance.now();
-  function frame(t) { const dt = Math.min(0.05, (t - last) / 1000); last = t; update(dt); Scene.render(dt); requestAnimationFrame(frame); }
+  function frame(t) { const dt = Math.min(0.05, (t - last) / 1000); last = t; requestAnimationFrame(frame);
+    try { update(dt); Scene.render(dt); } catch (e) { if (!frame.warned) { console.error(e); frame.warned = true; } } }
 
   /* ---------- layout ---------- */
   function fit() {

@@ -1,447 +1,409 @@
-/* Peiron Race — pseudo-3D harbour renderer.
-   The race is set at the real course: Matsugae pier (松が枝), Nagasaki Harbour.
-   Leg 1 heads NNW (bearing 345°) toward Inasayama and Mt Konpira,
-   the crews turn around buoys, and Leg 2 heads SSW (210°) toward the Megami Bridge.
-   Landmarks are painted onto a 360° panorama at their real compass bearings from the pier. */
+/* Peiron Race — pseudo-3D renderer of Nagasaki Harbour.
+   World coordinates are metres on a real map: x = east, y = north, origin = the start line,
+   about 40 m off the Matsugae cruise pier (松が枝国際観光船ふ頭).
+   The course runs from in front of the pier OUT into the harbour (bearing 285°, toward the
+   Mitsubishi shipyard), each boat rounds its own buoy, and comes BACK toward the pier (105°).
+   Out 630 m, back 520 m, as in the real 長崎ペーロン選手権大会. See AUTHENTICITY.md. */
 'use strict';
 const Scene = (() => {
-  const W = 1280, H = 395, HOR = 150, CAMH = 3.4, F = 640, BOAT_L = 13;
-  const LANES = [-6.9, -2.3, 2.3, 6.9];
-  const ROPES = [-9.2, -4.6, 0, 4.6, 9.2];
-  const PXD = F * Math.PI / 180;                 // pixels per degree near screen centre
-  const PANO_W = Math.round(360 * PXD), PANO_H = HOR + 2;
-  const LEG1 = 345, LEG2 = 210;
-  let cv, ctx, RES = 1, pano, pctx, PRES = 1;
-  const cam = { x: -1.0, z: -10, yaw: LEG1, shake: 0 };
-  const S = { time: 0, leg: 1, turnZ: 1e9, buoyZ: 1e9, finishZ: 1e9, boats: [], parts: [], yawFrom: LEG1, yawT: 1, boostFx: 0, idlePan: false, labelA: 0, labelT: 0 };
-  const hash = (a, b) => { const v = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return v - Math.floor(v); };
+  const W = 1280, H = 395, HOR = 150, CAMH = 3.4, F = 640, L = 13.6, D2R = Math.PI / 180;
+  const PXD = F * D2R;
+  const fwd = b => [Math.sin(b * D2R), Math.cos(b * D2R)];
+  const rgt = b => [Math.cos(b * D2R), -Math.sin(b * D2R)];
   const angDiff = (a, b) => ((a - b + 540) % 360) - 180;
+  const hash = (a, b) => { const v = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return v - Math.floor(v); };
+  let cv, ctx, RES = 1, sky, PRES = 1;
+  const cam = { x: 0, y: 0, h: 285, fx: 0, fy: 1, rx: 1, ry: 0, shake: 0 };
+  const S = { time: 0, boats: [], parts: [], boostFx: 0, labelA: 0, labelT: 0, travelled: 0 };
 
-  /* ---------------- projection & primitives ---------------- */
-  function P(x, y, z) { const dz = z - cam.z; if (dz < 1.0) return null; const s = F / dz; return { x: W / 2 + (x - cam.x) * s, y: HOR + (CAMH - y) * s, s }; }
+  /* ---------------- course geometry ---------------- */
+  const Course = {
+    H1: 285, LANE: 8, R: 2.2, lanes: [-12, -4, 4, 12], out: 630, back: 520,
+    setup(scale) { this.out = 630 * scale; this.back = 520 * scale; },
+    get total() { return this.out + this.back - L; },           // bow travel from start line to finish line
+    get finishAxis() { return this.out - this.back; },
+    u() { return fwd(this.H1); }, r() { return rgt(this.H1); },
+    // axis/lateral (course frame) -> world
+    w(axis, lat) { const u = this.u(), r = this.r(); return [u[0] * axis + r[0] * lat, u[1] * axis + r[1] * lat]; },
+    // boat pose from its race state
+    pose(b) {
+      const o = this.lanes[b.lane]; let axis, lat, h;
+      if (b.leg === 1) { axis = b.a - L / 2; lat = o; h = this.H1; }
+      else if (b.leg === 'turn') { const ca = this.out - L / 2, cl = o - this.R; axis = ca + this.R * Math.sin(b.phi); lat = cl + this.R * Math.cos(b.phi); h = this.H1 - b.phi / D2R; }
+      else { axis = this.out - L / 2 - b.a; lat = o - 2 * this.R; h = this.H1 - 180; }
+      const p = this.w(axis, lat); b.px = p[0]; b.py = p[1]; b.hd = (h + 360) % 360; return b;
+    },
+    progress(b) { return b.leg === 1 ? b.a : b.leg === 'turn' ? this.out + b.phi / Math.PI * 0.5 : this.out + b.a; },
+  };
+
+  /* ---------------- projection ---------------- */
+  function setCam(x, y, h) { cam.x = x; cam.y = y; cam.h = (h + 360) % 360; const f = fwd(cam.h), r = rgt(cam.h); cam.fx = f[0]; cam.fy = f[1]; cam.rx = r[0]; cam.ry = r[1]; }
+  function rel(X, Y) { const dx = X - cam.x, dy = Y - cam.y; return [dx * cam.rx + dy * cam.ry, dx * cam.fx + dy * cam.fy]; }
+  function P(lx, y, z) { if (z < 1.0) return null; const s = F / z; return { x: W / 2 + lx * s, y: HOR + (CAMH - y) * s, s, z }; }
+  function PW(X, Y, h) { const r = rel(X, Y); return P(r[0], h, r[1]); }
+  function depth(X, Y) { return rel(X, Y)[1]; }
   function poly(pts, fill, stroke, lw) {
-    for (const p of pts) if (!p) return;
+    if (!pts || pts.length < 3) return; for (const p of pts) if (!p) return;
     ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y); ctx.closePath();
     if (fill) { ctx.fillStyle = fill; ctx.fill(); } if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw || 1; ctx.stroke(); }
   }
   function seg(a, b, col, w) { if (!a || !b) return; ctx.strokeStyle = col; ctx.lineWidth = Math.max(0.7, w); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
   function dot(p, r, col) { if (!p) return; ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(0.6, r), 0, 6.283); ctx.fillStyle = col; ctx.fill(); }
+  // local frame of any object with centre (px,py) and heading hd: lx = right, lz = forward from the stern/back
+  function LF(o, len) { const f = fwd(o.hd), r = rgt(o.hd); return (lx, ly, lz) => PW(o.px + r[0] * lx + f[0] * (lz - len / 2), o.py + r[1] * lx + f[1] * (lz - len / 2), ly); }
 
   /* cached text sprites (fillText is slow on Chromebooks) */
   const SPR = new Map();
-  function sprite(key, w, h, draw) {
-    let c = SPR.get(key); if (c) return c;
-    c = document.createElement('canvas'); c.width = Math.ceil(w * 2); c.height = Math.ceil(h * 2);
-    const x = c.getContext('2d'); x.scale(2, 2); draw(x); c.lw = w; c.lh = h; SPR.set(key, c); return c;
-  }
+  function sprite(key, w, h, draw) { let c = SPR.get(key); if (c) return c; c = document.createElement('canvas'); c.width = Math.ceil(w * 2); c.height = Math.ceil(h * 2);
+    const x = c.getContext('2d'); x.scale(2, 2); draw(x); c.lw = w; c.lh = h; SPR.set(key, c); return c; }
   function measure(font, txt) { ctx.font = font; return ctx.measureText(txt).width; }
 
-  /* ---------------- 360° panorama ---------------- */
-  function paintPanorama() {
-    pano = pano || document.createElement('canvas');
-    PRES = Math.min(1.5, RES);
-    pano.width = Math.round(PANO_W * PRES); pano.height = Math.round(PANO_H * PRES);
-    pctx = pano.getContext('2d');
-    const c = pctx; c.setTransform(PRES, 0, 0, PRES, 0, 0);
-    const X = b => ((b % 360) + 360) % 360 * PXD;
-    const wrap = (b, fn) => { const x = X(b); fn(x); if (x < 300) fn(x + PANO_W); if (x > PANO_W - 300) fn(x - PANO_W); };
-    // sky
-    const g = c.createLinearGradient(0, 0, 0, HOR); g.addColorStop(0, '#3d9cf0'); g.addColorStop(0.6, '#8fcdf7'); g.addColorStop(1, '#d9f1fb');
-    c.fillStyle = g; c.fillRect(0, 0, PANO_W, PANO_H);
-    // clouds (big summer cumulus)
-    for (let i = 0; i < 26; i++) {
-      const b = hash(i, 1) * 360, y = 22 + hash(i, 2) * 55, k = 0.6 + hash(i, 3) * 0.9;
-      wrap(b, x => {
-        c.fillStyle = 'rgba(255,255,255,0.92)';
-        for (let j = 0; j < 6; j++) { c.beginPath(); c.ellipse(x + (j - 2.5) * 16 * k, y - Math.sin(j / 5 * Math.PI) * 12 * k, 20 * k, 14 * k, 0, 0, 6.3); c.fill(); }
-        c.fillStyle = 'rgba(200,225,245,0.7)'; c.beginPath(); c.ellipse(x, y + 8 * k, 46 * k, 6 * k, 0, 0, 6.3); c.fill();
-      });
+  /* ---------------- the real harbour (metres from the start line) ---------------- */
+  // hills: [x, y, height, radius]
+  const HILLS = [
+    [-1789, 1576, 333, 420], [-1450, 2150, 250, 420], [-1600, 900, 230, 420], [-1700, 200, 190, 450], [-1500, -600, 170, 420], [-1350, -1300, 160, 400], [-2300, -2500, 220, 600],
+    [66, 3229, 366, 520], [-650, 2750, 260, 450], [800, 2650, 300, 480],
+    [1350, 1900, 160, 380], [1900, 1300, 230, 420], [3034, 943, 386, 650], [2300, -200, 330, 600], [1500, -400, 220, 420],
+    [787, -832, 169, 330], [80, -600, 62, 230], [-150, -1150, 110, 330], [450, -1700, 230, 480], [-500, -2650, 200, 500], [1400, -1500, 280, 520]];
+  const LANDNAME = [ // landmark labels: [x, y, height, text]
+    [-1789, 1576, 333, 'いなさやま'], [-780, 900, 75, 'せかいいさんの クレーン'], [-1508, -2297, 175, 'めがみおおはし'],
+    [131, -477, 70, 'おおうらてんしゅどう'], [0, -577, 70, 'グラバーえん'], [787, -832, 169, 'なべかんむりやま'],
+    [300, 520, 25, 'でじまワーフ'], [103, 1542, 40, 'ながさきえき'], [90, -20, 30, 'まつがえターミナル'], [66, 3229, 366, 'こんぴらさん'], [3034, 943, 386, 'ひこさん']];
+  const hillAt = (X, Y) => { let m = 0; for (const [x, y, h, w] of HILLS) { const d2 = ((X - x) ** 2 + (Y - y) ** 2) / (w * w); m = Math.max(m, h * Math.exp(-d2)); } return m; };
+  // shorelines (south → north)
+  const EAST = [[-1250, -2300], [-900, -1900], [-500, -1450], [-200, -1000], [0, -600], [40, -250], [40, 200], [120, 320], [250, 450], [300, 600], [150, 760], [60, 950], [-40, 1150], [-120, 1500], [-220, 1900], [-300, 2300]];
+  const WEST = [[-1750, -2300], [-1500, -1700], [-1200, -1100], [-950, -500], [-850, 0], [-800, 500], [-760, 900], [-700, 1300], [-600, 1800], [-450, 2300]];
+  const BUILD = [], HOUSES = [], CRANES = [[-760, 860, 'giant'], [-820, 420, 'jib'], [-850, 120, 'jib'], [-930, -380, 'jib'], [-700, 1250, 'jib']];
+  (function genWorld() {
+    let k = 0;
+    const along = (pts, fn) => { for (let i = 1; i < pts.length; i++) { const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], len = Math.hypot(x1 - x0, y1 - y0);
+      for (let d = 0; d < len; d += 26) { const t = d / len; fn(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, k++); } } };
+    const CITY = ['#eef1f3', '#dde4e9', '#cfd8de', '#f3ece0', '#e7d9c9', '#c9d3dc', '#f6f3ee'];
+    along(EAST, (x, y, i) => { if (y > -260 && y < 210 && x < 80) return; // the pier itself is drawn separately
+      const city = y > 250, h = city ? 10 + hash(i, 1) * (y > 1200 ? 45 : 30) : 6 + hash(i, 1) * 12;
+      BUILD.push({ x: x + 10 + hash(i, 2) * 25, y, w: 14 + hash(i, 3) * 16, h, c: CITY[i % CITY.length] }); });
+    along(WEST, (x, y, i) => { const yard = y > -600 && y < 1400;
+      BUILD.push({ x: x - 12 - hash(i, 2) * 30, y, w: yard ? 40 + hash(i, 3) * 40 : 14 + hash(i, 3) * 12, h: yard ? 14 + hash(i, 1) * 18 : 7 + hash(i, 1) * 12,
+        c: yard ? (i % 3 ? '#a9b7c1' : '#8aa0ae') : CITY[i % CITY.length] }); });
+    // houses climbing the hills (Nagasaki is a "slope city") + trees
+    for (let i = 0; i < 1500; i++) {
+      const hl = HILLS[Math.floor(hash(i, 5) * HILLS.length)], a = hash(i, 6) * 6.283, rr = Math.sqrt(hash(i, 7)) * hl[3] * 1.3;
+      const X = hl[0] + Math.cos(a) * rr, Y = hl[1] + Math.sin(a) * rr, e = hillAt(X, Y); if (e < 8) continue;
+      const tree = hash(i, 8) < 0.45 || e > hl[2] * 0.75;
+      HOUSES.push({ x: X, y: Y, e, tree, c: tree ? 'rgba(48,104,70,0.55)' : CITY[i % CITY.length] });
     }
-    const bump = (b, ctr, h, w) => h * Math.exp(-((angDiff(b, ctr) / w) ** 2));
-    const ridge = (hf, fill) => {
-      c.fillStyle = fill; c.beginPath(); c.moveTo(-10, HOR + 2);
-      for (let b = 0; b <= 360.5; b += 0.5) c.lineTo(X(b) + (b === 360.5 ? PANO_W : 0), HOR - hf(b));
-      c.lineTo(PANO_W + 10, HOR + 2); c.closePath(); c.fill();
-    };
-    // far hazy mountains
-    const farH = b => 14 + 6 * Math.sin(b * 0.09) + bump(b, 60, 46, 22) + bump(b, 100, 34, 25) + bump(b, 20, 30, 16) + bump(b, 270, 26, 30) + bump(b, 150, 24, 18);
-    ridge(farH, '#9fbfd0');
-    // main hills: Inasa ridge (west), Mt Konpira (north), eastern hills, Minamiyamate (south-east)
-    const mouth = b => (b > 200 && b < 236) ? 1 : 0;   // harbour mouth: open water under Megami Bridge
-    const midH = b => {
-      let h = 8 + 3 * Math.sin(b * 0.31) + bump(b, 320, 84, 15) + bump(b, 300, 50, 10) + bump(b, 285, 40, 12) + bump(b, 262, 34, 12) + bump(b, 245, 22, 8)
-        + bump(b, 346, 62, 9) + bump(b, 10, 34, 10) + bump(b, 32, 48, 13) + bump(b, 62, 60, 15) + bump(b, 95, 52, 16) + bump(b, 128, 46, 14) + bump(b, 160, 40, 12);
-      if (mouth(b)) h = Math.min(h, 4 + Math.abs(angDiff(b, 218)) * 0.5);
-      return h;
-    };
-    ridge(midH, '#6a9c86');
-    // hillside houses (Nagasaki is a "slope city")
-    const HC = ['#f3efe6', '#e7e2d6', '#cfd8de', '#f6e3d2', '#dfe7ea', '#e9d4c4', '#ffffff'];
-    for (let i = 0; i < 2600; i++) {
-      const b = hash(i, 7) * 360; if (mouth(b)) continue;
-      const okArc = (b < 175) || (b > 280 && b < 345) || b > 345;
-      if (!okArc) continue;
-      const hTop = midH(b) * 0.82; const yy = HOR - 4 - hash(i, 8) * hTop;
-      wrap(b, x => { c.fillStyle = HC[i % HC.length]; c.fillRect(x, yy, 2 + hash(i, 9) * 3, 1.5 + hash(i, 10) * 2.2); });
-    }
-    // dark green tree texture on hills
-    for (let i = 0; i < 900; i++) {
-      const b = hash(i, 17) * 360, yy = HOR - 3 - hash(i, 18) * midH(b) * 0.95;
-      wrap(b, x => { c.fillStyle = 'rgba(60,110,80,0.35)'; c.beginPath(); c.arc(x, yy, 2 + hash(i, 19) * 3, 0, 6.3); c.fill(); });
-    }
-    // Inasayama TV towers (bearing 320)
-    wrap(320, x => {
-      [[-14, 26], [-4, 32], [7, 24], [16, 18]].forEach(([dx, h], k) => {
-        const top = HOR - midH(320 + dx / PXD) - h;
-        c.fillStyle = '#e23b2e'; c.fillRect(x + dx - 1.5, top, 3, h);
-        c.fillStyle = '#fff'; for (let j = 0; j < h; j += 6) c.fillRect(x + dx - 1.5, top + j, 3, 3);
-      });
-      c.fillStyle = '#dfe6ea'; c.fillRect(x - 10, HOR - midH(320) - 6, 18, 6);
-    });
-    // near hill: Minamiyamate (Glover Garden / Oura Cathedral), very close to the pier
-    const nearH = b => bump(b, 186, 58, 11) + bump(b, 168, 30, 9);
-    ridge(nearH, '#4f8a5e');
-    for (let i = 0; i < 260; i++) { const b = 160 + hash(i, 27) * 40, yy = HOR - 3 - hash(i, 28) * nearH(b) * 0.9;
-      wrap(b, x => { c.fillStyle = i % 3 ? 'rgba(40,95,60,0.5)' : HC[i % HC.length]; c.beginPath(); c.arc(x, yy, i % 3 ? 3 + hash(i, 29) * 3 : 2, 0, 6.3); c.fill(); }); }
-    // city along the north & east shore
-    const BC = ['#e9edf0', '#d5dde3', '#c4ced6', '#f1ece2', '#b9c6d0', '#e0d6c8', '#a9b8c4'];
-    for (let i = 0; i < 520; i++) {
-      const b = (330 + hash(i, 31) * 95) % 360;
-      const dense = Math.exp(-((angDiff(b, 2) / 22) ** 2));
-      const h = 4 + hash(i, 32) * (8 + 18 * dense), w = 4 + hash(i, 33) * 9;
-      wrap(b, x => { c.fillStyle = BC[i % BC.length]; c.fillRect(x, HOR - h, w, h); c.fillStyle = 'rgba(80,110,140,0.35)';
-        for (let yy = HOR - h + 2; yy < HOR - 2; yy += 3) c.fillRect(x + 1, yy, w - 2, 1); });
-    }
-    // Nagasaki Station building (bearing ~356)
-    wrap(356, x => { c.fillStyle = '#eef2f4'; c.fillRect(x - 18, HOR - 30, 36, 30); c.fillStyle = '#8fb3cf'; c.fillRect(x - 15, HOR - 26, 30, 3); c.fillRect(x - 15, HOR - 19, 30, 3); });
-    // Dejima Wharf + Mizube no Mori park (bearing ~25-40, close)
-    wrap(30, x => {
-      c.fillStyle = '#5b9a4a'; c.fillRect(x + 20, HOR - 7, 60, 7);
-      c.fillStyle = '#9a6a43'; c.fillRect(x - 30, HOR - 14, 50, 14); c.fillStyle = '#c99666'; c.fillRect(x - 30, HOR - 16, 50, 3);
-      c.fillStyle = '#ffe9b0'; for (let k = 0; k < 6; k++) c.fillRect(x - 27 + k * 8, HOR - 10, 4, 4);
-    });
-    // west shore shipyard (Mitsubishi Nagasaki), bearings 240-305
-    for (let i = 0; i < 40; i++) { const b = 242 + hash(i, 41) * 62, h = 5 + hash(i, 42) * 9, w = 10 + hash(i, 43) * 22;
-      wrap(b, x => { c.fillStyle = i % 2 ? '#9fb0bc' : '#7f95a5'; c.fillRect(x, HOR - h, w, h); }); }
-    // red & white jib cranes
-    [[252, 34], [266, 42], [276, 30], [289, 36]].forEach(([b, h], k) => wrap(b, x => {
-      c.fillStyle = '#d8392b'; c.fillRect(x - 1.5, HOR - h, 3, h);
-      c.strokeStyle = '#d8392b'; c.lineWidth = 2.2; c.beginPath(); c.moveTo(x, HOR - h + 2); c.lineTo(x + (k % 2 ? 26 : -26), HOR - h - 10); c.stroke();
-      c.strokeStyle = '#fff'; c.lineWidth = 1; c.beginPath(); c.moveTo(x, HOR - h + 2); c.lineTo(x + (k % 2 ? 26 : -26), HOR - h - 10); c.stroke();
-    }));
-    // Giant Cantilever Crane (Akunoura, bearing ~300) — the World Heritage hammerhead crane
-    wrap(300, x => {
-      c.fillStyle = '#2d3a44'; c.fillRect(x - 4, HOR - 40, 8, 40);
-      c.strokeStyle = '#2d3a44'; c.lineWidth = 1; for (let yy = HOR - 40; yy < HOR; yy += 6) { c.beginPath(); c.moveTo(x - 4, yy); c.lineTo(x + 4, yy + 6); c.stroke(); }
-      c.fillRect(x - 34, HOR - 48, 62, 7); c.fillRect(x - 34, HOR - 44, 12, 9);
-      c.fillRect(x + 16, HOR - 41, 2, 14);
-    });
-    // Megami Bridge across the harbour mouth (towers at ~212° and ~224°, H-shaped)
-    {
-      const deck = HOR - 13, top = HOR - 42;
-      const t1 = 212, t2 = 224, e1 = 203, e2 = 233;
-      c.strokeStyle = 'rgba(255,255,255,0.95)'; c.lineWidth = 0.8;
-      [t1, t2].forEach(t => { for (let k = 1; k <= 9; k++) { [-1, 1].forEach(s => { wrap(t, x => { c.beginPath(); c.moveTo(x, top + k * 1.6); c.lineTo(x + s * k * 7.5, deck); c.stroke(); }); }); } });
-      c.fillStyle = '#f7f9fb'; wrap(e1, x => c.fillRect(x, deck, X(e2) - X(e1), 3.5));
-      [t1, t2].forEach(t => wrap(t, x => { c.fillStyle = '#f2f5f7'; c.fillRect(x - 4, top, 2.5, HOR - top); c.fillRect(x + 1.5, top, 2.5, HOR - top);
-        c.fillRect(x - 4, top + 6, 8, 2); c.fillRect(x - 4, deck - 8, 8, 2); }));
-    }
-    // Oura Cathedral (bearing ~176) on the hill slope
-    wrap(176, x => {
-      const y0 = HOR - 30;
-      c.fillStyle = '#f7f5ef'; c.fillRect(x - 11, y0 - 14, 22, 14);
-      c.fillStyle = '#6b7a85'; c.beginPath(); c.moveTo(x - 13, y0 - 14); c.lineTo(x, y0 - 22); c.lineTo(x + 13, y0 - 14); c.fill();
-      c.fillStyle = '#f7f5ef'; c.fillRect(x - 3, y0 - 30, 6, 16);
-      c.fillStyle = '#4c5a64'; c.beginPath(); c.moveTo(x - 4, y0 - 30); c.lineTo(x, y0 - 40); c.lineTo(x + 4, y0 - 30); c.fill();
-      c.fillStyle = '#d8b74a'; c.fillRect(x - 0.5, y0 - 45, 1, 6); c.fillRect(x - 2, y0 - 43, 4, 1);
-      c.fillStyle = '#7fa7c9'; c.fillRect(x - 7, y0 - 10, 3, 6); c.fillRect(x + 4, y0 - 10, 3, 6); c.fillRect(x - 1.5, y0 - 26, 3, 4);
-    });
-    // Glover House (bearing ~191): long white bungalow with dark roof
-    wrap(191, x => {
-      const y0 = HOR - 44;
-      c.fillStyle = '#5b5f63'; c.beginPath(); c.moveTo(x - 20, y0 - 6); c.lineTo(x - 14, y0 - 12); c.lineTo(x + 14, y0 - 12); c.lineTo(x + 20, y0 - 6); c.fill();
-      c.fillStyle = '#fbfaf5'; c.fillRect(x - 18, y0 - 6, 36, 8);
-      c.fillStyle = '#b9c9b5'; for (let k = -16; k < 18; k += 5) c.fillRect(x + k, y0 - 5, 2, 6);
-    });
-    // quay line
-    c.fillStyle = 'rgba(70,90,100,0.45)'; c.fillRect(0, HOR - 1.5, PANO_W, 1.5);
-  }
+  })();
 
-  const LABELS = [[320, HOR - 136, 'いなさやま'], [346, HOR - 84, 'こんぴらさん'], [300, HOR - 66, 'せかいいさんの クレーン'], [356, HOR - 46, 'ながさきえき'],
-    [30, HOR - 34, 'でじまワーフ'], [218, HOR - 60, 'めがみおおはし'], [176, HOR - 84, 'おおうらてんしゅどう'], [193, HOR - 66, 'グラバーえん']];
-  function drawLabels() {
-    if (S.labelA <= 0.02) return;
-    ctx.save(); ctx.globalAlpha = S.labelA;
-    for (const [b, y, txt] of LABELS) {
-      const x = W / 2 + angDiff(b, cam.yaw) * PXD; if (x < -150 || x > W + 150) continue;
-      const font = '800 14px "M PLUS Rounded 1c", sans-serif', w = measure(font, txt) + 16;
-      const c = sprite('lab' + txt, w, 30, g => { g.fillStyle = 'rgba(255,255,255,0.92)'; g.beginPath(); g.roundRect ? g.roundRect(0, 0, w, 22, 11) : g.rect(0, 0, w, 22); g.fill();
-        g.beginPath(); g.moveTo(w / 2 - 5, 22); g.lineTo(w / 2, 28); g.lineTo(w / 2 + 5, 22); g.fill();
-        g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#21435e'; g.fillText(txt, w / 2, 12); });
-      ctx.drawImage(c, x - w / 2, y - 11, w, 30);
-    }
-    ctx.restore();
+  /* ---------------- sky (painted once, follows compass heading) ---------------- */
+  function paintSky() {
+    sky = sky || document.createElement('canvas'); PRES = Math.min(1.5, RES);
+    const SW = Math.round(360 * PXD); sky.width = Math.round(SW * PRES); sky.height = Math.round((HOR + 2) * PRES);
+    const c = sky.getContext('2d'); c.setTransform(PRES, 0, 0, PRES, 0, 0);
+    const g = c.createLinearGradient(0, 0, 0, HOR); g.addColorStop(0, '#3d9cf0'); g.addColorStop(0.6, '#8fcdf7'); g.addColorStop(1, '#dff3fb');
+    c.fillStyle = g; c.fillRect(0, 0, SW, HOR + 2);
+    for (let i = 0; i < 26; i++) { const x0 = hash(i, 1) * SW, y = 18 + hash(i, 2) * 52, k = 0.6 + hash(i, 3) * 0.9;
+      [x0, x0 - SW, x0 + SW].forEach(x => { c.fillStyle = 'rgba(255,255,255,0.93)';
+        for (let j = 0; j < 6; j++) { c.beginPath(); c.ellipse(x + (j - 2.5) * 16 * k, y - Math.sin(j / 5 * Math.PI) * 12 * k, 20 * k, 14 * k, 0, 0, 6.3); c.fill(); }
+        c.fillStyle = 'rgba(205,228,245,0.7)'; c.beginPath(); c.ellipse(x, y + 8 * k, 46 * k, 6 * k, 0, 0, 6.3); c.fill(); }); }
+    // very distant haze ridge all round
+    c.fillStyle = '#b5ccd8'; c.beginPath(); c.moveTo(0, HOR + 2);
+    for (let x = 0; x <= SW; x += 8) c.lineTo(x, HOR - 10 - 5 * Math.sin(x * 0.004) - 4 * Math.sin(x * 0.011 + 2));
+    c.lineTo(SW, HOR + 2); c.fill();
   }
   function drawSky() {
-    const off = ((cam.yaw * PXD - W / 2) % PANO_W + PANO_W) % PANO_W;
-    const sw = Math.min(W, PANO_W - off);
-    ctx.drawImage(pano, off * PRES, 0, sw * PRES, PANO_H * PRES, 0, 0, sw, PANO_H);
-    if (sw < W) ctx.drawImage(pano, 0, 0, (W - sw) * PRES, PANO_H * PRES, sw, 0, W - sw, PANO_H);
-    // reflection of the skyline in the water
-    ctx.save(); ctx.globalAlpha = 0.22; ctx.translate(0, HOR * 2 + 2); ctx.scale(1, -0.35); ctx.translate(0, HOR * (1 / 0.35 - 1) * 0 );
-    ctx.restore();
-    ctx.save(); ctx.globalAlpha = 0.2; ctx.setTransform(RES, 0, 0, -RES * 0.4, 0, (HOR + HOR * 0.4) * RES);
-    ctx.drawImage(pano, off * PRES, 0, sw * PRES, PANO_H * PRES, 0, 0, sw, PANO_H);
-    if (sw < W) ctx.drawImage(pano, 0, 0, (W - sw) * PRES, PANO_H * PRES, sw, 0, W - sw, PANO_H);
-    ctx.restore(); ctx.setTransform(RES, 0, 0, RES, 0, 0);
+    const SW = Math.round(360 * PXD), off = ((cam.h * PXD - W / 2) % SW + SW) % SW, sw = Math.min(W, SW - off);
+    ctx.drawImage(sky, off * PRES, 0, sw * PRES, (HOR + 2) * PRES, 0, 0, sw, HOR + 2);
+    if (sw < W) ctx.drawImage(sky, 0, 0, (W - sw) * PRES, (HOR + 2) * PRES, sw, 0, W - sw, HOR + 2);
   }
 
-  /* ---------------- water ---------------- */
-  function drawWater() {
-    const g = ctx.createLinearGradient(0, HOR, 0, H);
-    g.addColorStop(0, 'rgba(120,190,215,0.85)'); g.addColorStop(0.08, 'rgba(60,150,190,0.92)'); g.addColorStop(1, '#155d8c');
-    ctx.fillStyle = g; ctx.fillRect(0, HOR, W, H - HOR);
-    // pan offset makes the water slide sideways while the camera turns
-    const pan = cam.yaw * 0.35;
-    const base = Math.floor(cam.z / 2.6);
-    for (let i = 52; i >= 1; i--) {
-      const zi = base + i, z = zi * 2.6, p0 = P(0, 0, z); if (!p0) continue;
-      ctx.fillStyle = '#ffffff'; ctx.globalAlpha = Math.min(0.3, p0.s / 120) * (p0.s > 40 ? 0.6 : 1);
-      for (let k = -11; k <= 11; k++) {
-        const x = k * 2.8 + (hash(zi, k) - 0.5) * 2 + Math.sin(S.time * 0.9 + zi + k) * 0.18 + ((pan % 2.4));
-        const p = P(x, 0, z); const w = (0.35 + hash(zi, k + 50) * 0.9) * p.s;
-        ctx.fillRect(p.x - w / 2, p.y, w, Math.max(1, 0.05 * p.s));
-      }
+  /* ---------------- hills, houses, shore buildings, landmarks ---------------- */
+  const COLS = W / 4 + 1, LAYERS = [new Float32Array(COLS), new Float32Array(COLS), new Float32Array(COLS)];
+  const layerOf = z => z > 2600 ? 0 : z > 1100 ? 1 : 2;
+  const LAYER_COL = ['#98bccc', '#6f9f8b', '#5b9169'];
+  function drawLand() {
+    LAYERS.forEach(a => a.fill(0));
+    for (const [X, Y, h, w] of HILLS) {
+      const [lx, z] = rel(X, Y); if (z < 60) continue;
+      const cx = W / 2 + F * lx / z, hp = F * h / z, wp = F * w / z, La = LAYERS[layerOf(z)];
+      const i0 = Math.max(0, Math.floor((cx - 2.6 * wp) / 4)), i1 = Math.min(COLS - 1, Math.ceil((cx + 2.6 * wp) / 4));
+      for (let i = i0; i <= i1; i++) { const d = (i * 4 - cx) / wp, v = hp * Math.exp(-d * d); if (v > La[i]) La[i] = v; }
     }
-    ctx.globalAlpha = 1;
-  }
-  function drawRopes() {
-    const far = cam.z + 150;
-    ctx.globalAlpha = 0.55; for (const bx of ROPES) seg(P(bx, 0.08, cam.z + 1.6), P(bx, 0.08, far), '#eef7fb', 1.2); ctx.globalAlpha = 1;
-    const start = Math.ceil((cam.z + 1.6) / 2.5);
-    for (let i = Math.floor(far / 2.5); i >= start; i--) {
-      const z = i * 2.5;
-      for (const bx of ROPES) { const p = P(bx, 0.1, z); if (!p) continue; const big = i % 8 === 0;
-        dot(p, Math.min(big ? 8 : 5, (big ? 0.26 : 0.15) * p.s), big ? '#ff8a1f' : (i % 2 ? '#ff4b3a' : '#ffffff')); }
+    // houses projected once per frame, bucketed by layer
+    const hb = [[], [], []];
+    for (const o of HOUSES) { const [lx, z] = rel(o.x, o.y); if (z < 80) continue; const s = F / z, x = W / 2 + lx * s; if (x < -10 || x > W + 10) continue;
+      hb[layerOf(z)].push([x, HOR - o.e * s, Math.max(1.2, 9 * s), Math.max(1, 6 * s), o]); }
+    for (let k = 0; k < 3; k++) {
+      const La = LAYERS[k]; ctx.fillStyle = LAYER_COL[k]; ctx.beginPath(); ctx.moveTo(0, HOR + 3);
+      for (let i = 0; i < COLS; i++) ctx.lineTo(i * 4, HOR + 1 - La[i]); ctx.lineTo(W, HOR + 3); ctx.closePath(); ctx.fill();
+      for (const [x, y, w, h, o] of hb[k]) { const i = Math.round(x / 4); if (i < 0 || i >= COLS || y < HOR - La[i] + 1) continue;
+        ctx.fillStyle = o.c; if (o.tree) { ctx.beginPath(); ctx.arc(x, y, w * 0.45, 0, 6.3); ctx.fill(); } else ctx.fillRect(x, y - h, w, h); }
+      if (k === 0) drawInasaTowers();
     }
   }
+  function drawInasaTowers() {
+    const [lx, z] = rel(-1789, 1576); if (z < 100) return; const s = F / z, x = W / 2 + lx * s;
+    [[-40, 110], [-12, 140], [18, 105], [42, 80]].forEach(([dx, h]) => { const top = HOR - (333 + h) * s, bx = x + dx * s;
+      ctx.fillStyle = '#e23b2e'; ctx.fillRect(bx - 1.5, top, 3, h * s); ctx.fillStyle = '#fff'; for (let j = 0; j < h * s; j += 6) ctx.fillRect(bx - 1.5, top + j, 3, 3); });
+    ctx.fillStyle = '#e6ecef'; ctx.fillRect(x - 30 * s, HOR - 345 * s, 60 * s, 12 * s);
+  }
+  // a building as a flat facade facing the camera (cheap, fine at a distance)
+  function facade(o) {
+    const [lx, z] = rel(o.x, o.y); if (z < 30) return; const s = F / z, x = W / 2 + lx * s, w = o.w * s, h = o.h * s, base = HOR + CAMH * s;
+    if (x + w < 0 || x - w > W) return;
+    ctx.fillStyle = o.c; ctx.fillRect(x - w / 2, base - h, w, h);
+    if (h > 6) { ctx.fillStyle = 'rgba(70,110,140,0.32)'; for (let yy = base - h + 3; yy < base - 2; yy += Math.max(3, 4 * s)) ctx.fillRect(x - w / 2 + 1, yy, w - 2, Math.max(1, 1.2 * s)); }
+  }
+  function shoreStrip(pts) {   // grey quay line where land meets water
+    let prev = null; ctx.strokeStyle = '#8e9a9f';
+    for (const [x, y] of pts) { const [lx, z] = rel(x, y); const p = z > 20 ? { x: W / 2 + lx * F / z, y: HOR + CAMH * F / z } : null;
+      if (p && prev) { ctx.lineWidth = Math.max(1, F / z * 1.5); ctx.beginPath(); ctx.moveTo(prev.x, prev.y); ctx.lineTo(p.x, p.y); ctx.stroke(); } prev = p; }
+  }
+  function crane(x, y, kind) {
+    const [lx, z] = rel(x, y); if (z < 40) return; const s = F / z, cx = W / 2 + lx * s, base = HOR + CAMH * s;
+    if (kind === 'giant') {   // the 1909 Giant Cantilever Crane (hammerhead), 61.7 m
+      ctx.fillStyle = '#2d3a44'; ctx.fillRect(cx - 6 * s, base - 50 * s, 12 * s, 50 * s);
+      ctx.fillRect(cx - 45 * s, base - 62 * s, 75 * s, 8 * s); ctx.fillRect(cx - 45 * s, base - 58 * s, 14 * s, 10 * s); ctx.fillRect(cx + 24 * s, base - 54 * s, 2 * s, 18 * s);
+      ctx.strokeStyle = '#2d3a44'; ctx.lineWidth = Math.max(0.7, s); for (let k = 0; k < 8; k++) { ctx.beginPath(); ctx.moveTo(cx - 6 * s, base - k * 6 * s); ctx.lineTo(cx + 6 * s, base - (k + 1) * 6 * s); ctx.stroke(); }
+    } else {
+      ctx.fillStyle = '#d8392b'; ctx.fillRect(cx - 1.5 * s, base - 40 * s, 3 * s, 40 * s);
+      ctx.strokeStyle = '#d8392b'; ctx.lineWidth = Math.max(1.2, 2.5 * s); ctx.beginPath(); ctx.moveTo(cx, base - 38 * s); ctx.lineTo(cx + 30 * s, base - 50 * s); ctx.stroke();
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(0.6, 1 * s); ctx.stroke();
+    }
+  }
+  function megami() {  // Megami Bridge: 880 m cable-stayed, H-shaped 170 m towers, deck 65 m
+    const deck = [-1960, -1060], towers = [-1748, -1268], Y = -2297;
+    const d0 = PW(deck[0], Y, 65), d1 = PW(deck[1], Y, 65); if (!d0 || !d1) return;
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 0.8;
+    towers.forEach(tx => { const top = PW(tx, Y, 165); for (let k = 1; k <= 9; k++) [-1, 1].forEach(sd => { const e = PW(tx + sd * k * 24, Y, 65); const t2 = PW(tx, Y, 165 - k * 4);
+      if (t2 && e) { ctx.beginPath(); ctx.moveTo(t2.x, t2.y); ctx.lineTo(e.x, e.y); ctx.stroke(); } }); });
+    seg(d0, d1, '#f7f9fb', Math.max(1.5, 4 * d0.s));
+    towers.forEach(tx => { const b = PW(tx, Y, 0), t = PW(tx, Y, 170); if (!b || !t) return; const w = Math.max(1.2, 6 * t.s);
+      ctx.fillStyle = '#f2f5f7'; ctx.fillRect(b.x - w * 1.6, t.y, w, b.y - t.y); ctx.fillRect(b.x + w * 0.6, t.y, w, b.y - t.y);
+      ctx.fillRect(b.x - w * 1.6, t.y + (b.y - t.y) * 0.08, w * 3.2, w * 0.7); ctx.fillRect(b.x - w * 1.6, t.y + (b.y - t.y) * 0.55, w * 3.2, w * 0.7); });
+  }
+  function ouraCathedral() { const p = PW(131, -477, 26); if (!p || p.z < 50) return; const s = p.s;
+    ctx.fillStyle = '#f7f5ef'; ctx.fillRect(p.x - 14 * s, p.y - 16 * s, 28 * s, 16 * s);
+    ctx.fillStyle = '#6b7a85'; ctx.beginPath(); ctx.moveTo(p.x - 16 * s, p.y - 16 * s); ctx.lineTo(p.x, p.y - 26 * s); ctx.lineTo(p.x + 16 * s, p.y - 16 * s); ctx.fill();
+    ctx.fillStyle = '#f7f5ef'; ctx.fillRect(p.x - 4 * s, p.y - 36 * s, 8 * s, 20 * s);
+    ctx.fillStyle = '#4c5a64'; ctx.beginPath(); ctx.moveTo(p.x - 5 * s, p.y - 36 * s); ctx.lineTo(p.x, p.y - 50 * s); ctx.lineTo(p.x + 5 * s, p.y - 36 * s); ctx.fill();
+    ctx.fillStyle = '#d8b74a'; ctx.fillRect(p.x - 0.6 * s, p.y - 57 * s, 1.2 * s, 7 * s); ctx.fillRect(p.x - 2.5 * s, p.y - 55 * s, 5 * s, 1.2 * s); }
+  function gloverHouse() { const p = PW(0, -577, 48); if (!p || p.z < 50) return; const s = p.s;
+    ctx.fillStyle = '#5b5f63'; ctx.beginPath(); ctx.moveTo(p.x - 26 * s, p.y - 8 * s); ctx.lineTo(p.x - 18 * s, p.y - 15 * s); ctx.lineTo(p.x + 18 * s, p.y - 15 * s); ctx.lineTo(p.x + 26 * s, p.y - 8 * s); ctx.fill();
+    ctx.fillStyle = '#fbfaf5'; ctx.fillRect(p.x - 24 * s, p.y - 8 * s, 48 * s, 9 * s); }
+  function dejimaWharf() { const p = PW(300, 520, 0); if (!p || p.z < 40) return; const s = p.s;
+    ctx.fillStyle = '#9a6a43'; ctx.fillRect(p.x - 40 * s, p.y - 10 * s, 80 * s, 10 * s); ctx.fillStyle = '#c99666'; ctx.fillRect(p.x - 40 * s, p.y - 12 * s, 80 * s, 2.5 * s);
+    ctx.fillStyle = '#5b9a4a'; const q = PW(170, 400, 0); if (q) ctx.fillRect(q.x - 60 * q.s, q.y - 6 * q.s, 120 * q.s, 6 * q.s); }
 
-  /* ---------------- props ---------------- */
-  function drawTurnBuoys() {
-    const z = S.buoyZ;
-    for (const lx of LANES) {
-      const p = P(lx, 0, z), t = P(lx, 2.2, z); if (!p) continue; const s = p.s;
-      ctx.beginPath(); ctx.ellipse(p.x, p.y - 0.35 * s, 0.75 * s, 0.6 * s, 0, 0, 6.3); ctx.fillStyle = '#ffb703'; ctx.fill();
-      ctx.beginPath(); ctx.ellipse(p.x, p.y - 0.5 * s, 0.75 * s, 0.18 * s, 0, 0, 6.3); ctx.fillStyle = '#ff7b00'; ctx.fill();
-      seg(P(lx, 0.6, z), t, '#333', 0.06 * s);
-      const f1 = P(lx, 2.2, z), f2 = P(lx + 1.2, 1.9, z), f3 = P(lx, 1.6, z); poly([f1, f2, f3], '#e63946');
-    }
-    const c = P(0, 4.2, z); if (c) bannerText(c, 'ターン！ TURN', '#ff7b00', c.s);
+  /* ---------------- Matsugae pier: stand, tents, terminal rooftop crowd ---------------- */
+  const CROWD_C = ['#e63946', '#2c6ed5', '#ffb703', '#2a9d8f', '#f4a3c0', '#ffffff', '#7b5cd6', '#ff7b00'];
+  function box(x0, x1, y0, y1, h0, h1, top, side, front) {  // axis-aligned box in world coords, draw visible faces
+    const c = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+    const faces = [[0, 1, [0, -1]], [1, 2, [1, 0]], [2, 3, [0, 1]], [3, 0, [-1, 0]]];
+    for (const [a, b, n] of faces) { const mx = (c[a][0] + c[b][0]) / 2, my = (c[a][1] + c[b][1]) / 2; if ((cam.x - mx) * n[0] + (cam.y - my) * n[1] <= 0) continue;
+      poly([PW(c[a][0], c[a][1], h0), PW(c[b][0], c[b][1], h0), PW(c[b][0], c[b][1], h1), PW(c[a][0], c[a][1], h1)], n[0] ? side : front, 'rgba(0,0,0,.08)', 1); }
+    if (top) poly(c.map(([x, y]) => PW(x, y, h1)), top);
   }
-  function bannerText(p, txt, col, s) {
-    const fs = Math.max(8, 0.9 * s); ctx.font = `900 ${fs}px "Baloo 2","M PLUS Rounded 1c",sans-serif`;
-    const w = ctx.measureText(txt).width + fs; ctx.fillStyle = col; ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1, fs * 0.12);
-    ctx.beginPath(); ctx.roundRect ? ctx.roundRect(p.x - w / 2, p.y - fs * 0.75, w, fs * 1.5, fs * 0.4) : ctx.rect(p.x - w / 2, p.y - fs * 0.75, w, fs * 1.5); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, p.x, p.y + fs * 0.05);
-  }
-  function drawGate(z, txt, col) {
-    const L1 = P(-10.5, 0, z), L2 = P(-10.5, 5, z), R1 = P(10.5, 0, z), R2 = P(10.5, 5, z); if (!L1) return; const s = L1.s;
-    for (let i = 0; i < 38; i++) { const x0 = -9.5 + i * 0.5;
-      poly([P(x0, 0, z), P(x0 + 0.5, 0, z), P(x0 + 0.5, 0, z + 0.5), P(x0, 0, z + 0.5)], i % 2 ? '#222' : '#fff');
-      poly([P(x0, 0, z + 0.5), P(x0 + 0.5, 0, z + 0.5), P(x0 + 0.5, 0, z + 1), P(x0, 0, z + 1)], i % 2 ? '#fff' : '#222'); }
-    seg(L1, L2, col, s * 0.35); seg(R1, R2, col, s * 0.35);
-    poly([P(-10.5, 5.2, z), P(10.5, 5.2, z), P(10.5, 3.9, z), P(-10.5, 3.9, z)], col, '#fff', Math.max(1, s * 0.07));
-    const c = P(0, 4.55, z); ctx.fillStyle = '#fff'; ctx.font = `900 ${Math.max(7, s * 0.95)}px "Baloo 2","M PLUS Rounded 1c",sans-serif`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, c.x, c.y);
-  }
-  function drawStartLine() {
-    const z = BOAT_L + 0.5;
-    for (let i = 0; i < 20; i++) { const p = P(-9.5 + i, 0.1, z); if (p) dot(p, Math.min(6, 0.2 * p.s), i % 2 ? '#e63946' : '#fff'); }
-  }
-  // fishing boats with colourful tairyō-bata flags, moored outside the course
-  function fishingBoat(x, z, k) {
-    const a = P(x - 1.6, 0, z), b = P(x + 1.6, 0, z), c = P(x + 1.3, 0.9, z), d = P(x - 1.3, 0.9, z); if (!a) return; const s = a.s;
-    poly([a, b, c, d], '#f4f1e8', '#5a6b75', Math.max(0.5, s * 0.04));
-    poly([P(x - 0.4, 0.9, z), P(x + 0.6, 0.9, z), P(x + 0.6, 1.8, z), P(x - 0.4, 1.8, z)], '#e8edf0');
-    const cols = ['#e63946', '#1d6fe0', '#ffb703', '#2a9d8f', '#ff7b00'];
-    for (let j = 0; j < 3; j++) { const fx = x - 1 + j; seg(P(fx, 0.9, z), P(fx, 3.4, z), '#666', s * 0.04);
-      const col = cols[(k + j) % cols.length]; poly([P(fx, 3.4, z), P(fx + 0.9, 3.3, z), P(fx + 0.9, 2.6, z), P(fx, 2.6, z)], col); }
-  }
-  // The east bank of the harbour: one continuous quay from the camera to the horizon (side +1 = right, -1 = left).
-  // segs: [[zFrom, zTo, quayX], ...]  — quayX is the distance of the quay wall from the course centre.
-  const Q = 16;
-  function shore(side, segs) {
-    const items = [], far = cam.z + 260;
-    // land + quay wall, drawn first (behind everything on the water)
-    items.push([1e9, () => {
-      for (const [za, zb, qx] of segs) {
-        const z0 = Math.max(za, cam.z + 1.2), z1 = Math.min(zb, far); if (z1 <= z0) continue;
-        const X = side * qx, XF = side * 400;
-        poly([P(X, 1.3, z0), P(X, 1.3, z1), P(XF, 1.3, z1), P(XF, 1.3, z0)], '#cbc3b2');
-        poly([P(X, 0, z0), P(X, 0, z1), P(X, 1.3, z1), P(X, 1.3, z0)], '#9e9688');
-        seg(P(X, 1.3, z0), P(X, 1.3, z1), '#e9e3d6', 2);
-      }
-      // end walls where the quay steps back (berths)
-      for (let i = 1; i < segs.length; i++) { const z = segs[i][0], qa = segs[i - 1][2], qb = segs[i][2];
-        if (z > cam.z + 1.2 && z < far) poly([P(side * qa, 0, z), P(side * qb, 0, z), P(side * qb, 1.3, z), P(side * qa, 1.3, z)], '#b3ab9c'); }
-    }]);
-    // warehouses, trees and shops along the quay
-    const start = Math.ceil((cam.z + 4) / 11) * 11;
-    for (let z = Math.min(far, segs[segs.length - 1][1]); z >= start; z -= 11) {
-      const sg = segs.find(g => z >= g[0] && z < g[1]); if (!sg) continue;
-      const k = Math.round(z / 11), qx = sg[2];
-      items.push([z, () => {
-        const x0 = side * (qx + 5 + hash(k, 3) * 4), x1 = x0 + side * 6, w = 4 + hash(k, 4) * 4, h = 3 + hash(k, 5) * 6;
-        if (hash(k, 6) < 0.3) { // trees
-          for (let j = 0; j < 3; j++) { const t = P(x0 + side * j * 1.4, 1.3 + 1.6, z + j * 1.8), tr = P(x0 + side * j * 1.4, 1.3, z + j * 1.8);
-            if (t) { seg(tr, t, '#7a5a3a', t.s * 0.25); dot(t, t.s * 1.2, j % 2 ? '#4f9a5a' : '#3f8a4c'); } }
-          return;
-        }
-        const col = ['#f2efe8', '#e3e8ec', '#f4e6d4', '#dfe9e1', '#e9dfe9'][k % 5], roof = ['#5d7486', '#8a5a44', '#4f6b5a', '#6d6d7a'][k % 4];
-        poly([P(x0, 1.3, z), P(x0, 1.3, z + w), P(x0, 1.3 + h, z + w), P(x0, 1.3 + h, z)], col, 'rgba(0,0,0,.12)', 1);
-        poly([P(x0, 1.3, z), P(x1, 1.3, z), P(x1, 1.3 + h, z), P(x0, 1.3 + h, z)], col);
-        poly([P(x0, 1.3 + h, z), P(x0, 1.3 + h, z + w), P(x1, 1.3 + h, z + w), P(x1, 1.3 + h, z)], roof);
-        for (let r = 0; r < Math.floor(h / 2); r++) seg(P(x0, 2.6 + r * 2, z + 0.6), P(x0, 2.6 + r * 2, z + w - 0.6), '#8fb3cf', Math.max(1, (P(x0, 2.6, z) || { s: 1 }).s * 0.3));
-      }]);
-    }
+  function pierItems() {
+    const items = [], d = (x, y) => depth(x, y);
+    // quay wall + apron
+    items.push([d(55, 0), () => { box(40, 72, -190, 200, 0, 2.2, '#cfc8b8', '#a39b8d', '#a39b8d'); }]);
+    // terminal building (green rooftop deck — people watch the race from up here)
+    items.push([d(95, -20), () => { box(78, 112, -110, 70, 2.2, 14, '#7fb069', '#e4e9ec', '#d7dee3');
+      for (let i = 0; i < 70; i++) { const p = PW(80 + hash(i, 4) * 4, -105 + i * 2.5, 15.4 + Math.max(0, Math.sin(S.time * 5 + i)) * 0.3); if (p) dot(p, 0.6 * p.s, CROWD_C[i % 8]); } }]);
+    // special viewing stand with awning and banner
+    items.push([d(52, -10), () => {
+      for (let r = 0; r < 5; r++) box(46 + r * 2, 48 + r * 2, -60, 40, 2.2, 3 + r * 1.2, '#e9e4d8', '#bdb6a7', '#cfc8b8');
+      for (let r = 0; r < 5; r++) for (let i = 0; i < 40; i++) { const p = PW(47 + r * 2, -58 + i * 2.5, 3.9 + r * 1.2 + Math.max(0, Math.sin(S.time * 6 + i + r)) * 0.25); if (p) dot(p, 0.42 * p.s, CROWD_C[(i * 3 + r) % 8]); }
+      poly([PW(46, -62, 11), PW(46, 42, 11), PW(58, 42, 12.5), PW(58, -62, 12.5)], '#ffffff', '#c81d25', 2);
+      const b = PW(45.8, -10, 9); if (b) { const c = sprite('stand', 260, 34, g => { g.fillStyle = '#c81d25'; g.fillRect(0, 0, 260, 34); g.fillStyle = '#fff'; g.font = '900 20px "M PLUS Rounded 1c",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('長崎ペーロン選手権大会', 130, 18); });
+        const w = 70 * b.s; ctx.drawImage(c, b.x - w / 2, b.y - w * 34 / 260 / 2, w, w * 34 / 260); } }]);
+    // tents and the crowd along the quay edge
+    for (let k = 0; k < 8; k++) { const y = (k < 4 ? -175 + k * 26 : 60 + (k - 4) * 30); items.push([d(50, y), () => {
+      box(48, 56, y, y + 10, 2.2, 5, null, k % 2 ? '#e8f1fb' : '#fff3e6', k % 2 ? '#e8f1fb' : '#fff3e6');
+      poly([PW(47.5, y - 0.5, 5), PW(47.5, y + 10.5, 5), PW(52, y + 10.5, 7), PW(52, y - 0.5, 7)], k % 2 ? '#2c6ed5' : '#e63946');
+      poly([PW(56.5, y - 0.5, 5), PW(56.5, y + 10.5, 5), PW(52, y + 10.5, 7), PW(52, y - 0.5, 7)], k % 2 ? '#1f56b0' : '#b8242f'); }]); }
+    items.push([d(42, 0), () => { for (let i = 0; i < 150; i++) { const y = -185 + i * 2.55, b = Math.max(0, Math.sin(S.time * 6 + i * 1.3)) * 0.3;
+      const p = PW(41.5 + (i % 2), y, 3.1 + b), hd = PW(41.5 + (i % 2), y, 3.8 + b); if (p) { dot(p, 0.45 * p.s, CROWD_C[i % 8]); dot(hd, 0.28 * hd.s, '#2a1c12'); } } }]);
     return items;
   }
-  // Matsugae pier crowd and festival tents, standing on the quay
-  function crowd(side, z0, z1) {
-    const x0 = side * (Q + 0.2);
-    const items = [];
-    for (let z = z1; z > z0; z -= 1.5) items.push([z, () => {
-      const a = P(x0, 1.3, z); if (!a) return; const k = Math.round(z / 1.5);
-      if (k % 9 === 0) {
-        poly([P(x0 + side * 2.8, 1.3, z), P(x0 + side * 2.8, 3.4, z), P(x0 + side * 5.4, 3.4, z), P(x0 + side * 5.4, 1.3, z)], k % 2 ? '#e8f1fb' : '#fff3e6');
-        poly([P(x0 + side * 2.5, 3.4, z), P(x0 + side * 4.1, 4.2, z), P(x0 + side * 5.7, 3.4, z)], k % 2 ? '#2c6ed5' : '#e63946');
-      }
-      for (let r = 0; r < 3; r++) for (let j = 0; j < 2; j++) {
-        const hx = x0 + side * (0.5 + r * 0.7), hz = z - j * 0.75 - 0.3, bob = Math.max(0, Math.sin(S.time * 6 + k * 1.7 + r + j)) * 0.12;
-        const body = P(hx, 1.75 + bob, hz), head = P(hx, 2.15 + bob, hz);
-        const cc = ['#e63946', '#2c6ed5', '#ffb703', '#2a9d8f', '#f4a3c0', '#ffffff', '#7b5cd6'][(k * 7 + r * 3 + j) % 7];
-        if (body) { dot(body, 0.26 * body.s, cc); dot(head, 0.16 * head.s, '#2a1c12'); }
-      }
-    }]);
+
+  /* ---------------- course furniture: buoys, finish, spectator boats ---------------- */
+  function buoy(x, y, r, col, band) { const p = PW(x, y, 0); if (!p) return; const s = p.s;
+    ctx.beginPath(); ctx.ellipse(p.x, p.y - r * 0.55 * s, r * s, r * 0.85 * s, 0, 0, 6.3); ctx.fillStyle = col; ctx.fill();
+    if (band) { ctx.beginPath(); ctx.ellipse(p.x, p.y - r * 0.7 * s, r * s, r * 0.25 * s, 0, 0, 6.3); ctx.fillStyle = band; ctx.fill(); } }
+  function flagPole(x, y, h, col, txt) { const b = PW(x, y, 0.4), t = PW(x, y, h); if (!b || !t) return; seg(b, t, '#555', Math.max(0.6, 0.08 * t.s));
+    poly([t, { x: t.x + 1.4 * t.s, y: t.y + 0.45 * t.s }, { x: t.x, y: t.y + 0.9 * t.s }], col);
+    if (txt && t.s > 6) { const c = sprite('fl' + txt, 80, 26, g => { g.fillStyle = col; g.fillRect(0, 0, 80, 26); g.fillStyle = '#fff'; g.font = '900 17px "M PLUS Rounded 1c",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(txt, 40, 14); });
+      const w = 3.2 * t.s; ctx.drawImage(c, t.x - w / 2, t.y - w * 26 / 80 - 2, w, w * 26 / 80); } }
+  function courseItems() {
+    const items = [], C = Course, add = (axis, lat, fn) => { const [x, y] = C.w(axis, lat); items.push([depth(x, y), () => fn(x, y)]); };
+    // start line (bows on axis 0) and finish line, red/white buoys across the course
+    for (let lat = -18; lat <= 18; lat += 3) add(0, lat, (x, y) => buoy(x, y, 0.35, (lat / 3) % 2 ? '#e63946' : '#fff'));
+    for (let lat = -20; lat <= 16; lat += 3) add(C.finishAxis, lat, (x, y) => buoy(x, y, 0.42, (lat / 3) % 2 ? '#fff' : '#e63946'));
+    add(C.finishAxis, -22, (x, y) => flagPole(x, y, 5, '#e63946', 'ゴール')); add(C.finishAxis, 18, (x, y) => flagPole(x, y, 5, '#e63946', 'ゴール'));
+    add(0, 20, (x, y) => flagPole(x, y, 4.5, '#2c6ed5', 'スタート'));
+    // one turn buoy per lane, at the centre of that boat's turning circle
+    C.lanes.forEach(o => add(C.out - L / 2, o - C.R, (x, y) => { buoy(x, y, 0.9, '#ffb703', '#ff7b00'); flagPole(x, y, 3.2, '#e63946'); }));
+    add(C.out + 6, -18, (x, y) => flagPole(x, y, 5, '#ff7b00', 'ターン'));
+    // distance buoys every 50 m along both course edges
+    for (let a = 50; a < C.out; a += 50) [-21, 18].forEach(lat => add(a, lat, (x, y) => buoy(x, y, a % 100 ? 0.3 : 0.45, a % 100 ? '#ff8a1f' : '#ffd23f')));
+    // spectator boats: a sightseeing boat (遊覧船), safety boats and fishing boats with tairyō-bata
+    add(C.out * 0.55, 42, (x, y) => yuransen(x, y));
+    [[C.out * 0.3, -34], [C.out * 0.8, 30], [C.out * 0.15, 30]].forEach(([a, lat], k) => add(a, lat, (x, y) => smallBoat(x, y, k, k === 0)));
+    [[C.out * 0.45, -48], [C.out * 0.7, -44], [C.out * 0.95, 45]].forEach(([a, lat], k) => add(a, lat, (x, y) => smallBoat(x, y, k + 3, false)));
     return items;
   }
-  function ship(x, z0, z1) {
-    const side = Math.sign(x), xn = x - side * 3;
-    const A = (y, z) => P(xn, y, z);
-    poly([P(xn, 0, z0), P(xn - side * 9, 0, z0), P(xn - side * 9, 6, z0), P(xn, 6, z0)], '#e7eef4', '#9fb3c2', 1);
-    poly([A(0, z0), A(0, z1), A(6, z1), A(6, z0)], '#fbfdff', '#9fb3c2', 1);
-    poly([A(0, z0), A(0, z1), A(1.4, z1), A(1.4, z0)], '#1f4e8c');
-    poly([A(6, z0 + 6), A(6, z1 - 8), A(10, z1 - 12), A(10, z0 + 10)], '#f1f5f9', '#c7d3dc', 1);
-    for (let z = z0 + 8; z < z1 - 10; z += 2) seg(A(7.5, z), A(7.5, z + 1.2), '#5e86a8', 2);
-    const f = P(xn - side * 1, 10, z1 - 22), f2 = P(xn - side * 1, 13, z1 - 22); seg(f, f2, '#1f4e8c', f ? f.s * 2.2 : 1);
-  }
+  function yuransen(x, y) { const o = { px: x, py: y, hd: Course.H1 }, B = LF(o, 26);
+    poly([B(-2.6, 0, 0), B(2.6, 0, 0), B(2.6, 2.4, 0), B(-2.6, 2.4, 0)], '#f5f8fb', '#7a8c99', 1);
+    poly([B(2.6, 0, 0), B(2.6, 0, 22), B(0, 0, 26), B(0, 2.4, 26), B(2.6, 2.4, 22), B(2.6, 2.4, 0)], '#fbfdff', '#7a8c99', 1);
+    poly([B(-2.6, 2.4, 0), B(2.6, 2.4, 0), B(2.6, 4.6, 3), B(-2.6, 4.6, 3)], '#e8eef3'); poly([B(2.6, 2.4, 2), B(2.6, 2.4, 18), B(2.4, 4.6, 16), B(2.4, 4.6, 3)], '#e8eef3', '#7a8c99', 1);
+    for (let i = 0; i < 10; i++) { const p = B(2.6, 3.4, 3.5 + i * 1.3); if (p) dot(p, 0.35 * p.s, CROWD_C[i % 8]); }
+    seg(B(2.6, 1.0, 0), B(2.6, 1.0, 22), '#1f56b0', 3); }
+  function smallBoat(x, y, k, safety) { const o = { px: x, py: y, hd: Course.H1 + (k % 2 ? 8 : -8) }, B = LF(o, 7);
+    poly([B(-1.2, 0, 0), B(1.2, 0, 0), B(1.2, 0.9, 0.3), B(-1.2, 0.9, 0.3)], '#f4f1e8', '#5a6b75', 1);
+    poly([B(1.2, 0, 0), B(1.2, 0, 5.5), B(0, 0, 7), B(0, 0.9, 7), B(1.2, 0.9, 5.5), B(1.2, 0.9, 0.3)], safety ? '#ff7b00' : '#f8f6ef', '#5a6b75', 1);
+    poly([B(-0.6, 0.9, 1.2), B(0.6, 0.9, 1.2), B(0.6, 2, 1.2), B(-0.6, 2, 1.2)], '#e8edf0');
+    if (!safety) { const cols = ['#e63946', '#1d6fe0', '#ffb703', '#2a9d8f', '#ff7b00'];
+      for (let j = 0; j < 3; j++) { const zf = 1 + j * 2; seg(B(0, 0.9, zf), B(0, 4, zf), '#666', 1);
+        poly([B(0, 4, zf), B(0, 4, zf + 1.2), B(0, 3, zf + 1.2), B(0, 3, zf)], cols[(k + j) % 5]); } } }
 
-  /* ---------------- boats ---------------- */
-  const hullW = t => { let w = 0.66; if (t < 0.08) w *= 0.72 + t / 0.08 * 0.28; if (t > 0.74) w *= Math.max(0.05, (1 - t) / 0.26); return w; };
-  const hullH = t => 0.5 + (t > 0.84 ? (t - 0.84) * 3.2 : 0);
-  function wake(b) {
+  /* ---------------- peiron boats ---------------- */
+  // 13.6 m cedar hull, bow-shaped (弓形): rises at both bow and stern
+  const hullW = t => { let w = 0.66; if (t < 0.08) w *= 0.6 + t / 0.08 * 0.4; if (t > 0.78) w *= Math.max(0.05, (1 - t) / 0.22); return w; };
+  const hullH = t => 0.5 + 0.55 * Math.pow(Math.abs(t - 0.45) / 0.55, 2.2);
+  function wake(b, B) {
     const k = Math.min(1, b.v / 12) * 0.5 + 0.12; ctx.globalAlpha = k; ctx.strokeStyle = '#fff'; ctx.lineCap = 'round';
-    for (const sd of [-1, 1]) {
-      let prev = null; for (let i = 0; i <= 8; i++) { const p = P(b.x + sd * (0.6 + i * 0.24), 0, b.z - i * 0.9); if (p && prev) { ctx.lineWidth = Math.max(1, p.s * 0.16); ctx.beginPath(); ctx.moveTo(prev.x, prev.y); ctx.lineTo(p.x, p.y); ctx.stroke(); } prev = p; }
-      seg(P(b.x + sd * 0.2, 0, b.z + BOAT_L * 0.98), P(b.x + sd * 0.8, 0, b.z + BOAT_L * 0.8), '#fff', 2);
-    }
-    const f = P(b.x, 0, b.z - 0.3); if (f) { ctx.beginPath(); ctx.ellipse(f.x, f.y, f.s * 0.9, f.s * 0.16, 0, 0, 6.3); ctx.fillStyle = '#fff'; ctx.fill(); }
+    for (const sd of [-1, 1]) { let prev = null; for (let i = 0; i <= 8; i++) { const p = B(sd * (0.6 + i * 0.24), 0, -i * 0.9); if (p && prev) { ctx.lineWidth = Math.max(1, p.s * 0.16); ctx.beginPath(); ctx.moveTo(prev.x, prev.y); ctx.lineTo(p.x, p.y); ctx.stroke(); } prev = p; }
+      seg(B(sd * 0.15, 0, L * 0.99), B(sd * 0.75, 0, L * 0.82), '#fff', 2); }
     ctx.globalAlpha = 1;
   }
-  function rower(b, t, sd, ph, bob) {
-    const z = b.z + t * BOAT_L, xs = b.x + sd * 0.34, h0 = hullH(t) - 0.12 + bob, lean = Math.cos(ph), sn = Math.sin(ph);
-    const hip = P(xs, h0, z); if (!hip) return; const s = hip.s;
-    const sh = P(xs, h0 + 0.7, z + lean * 0.25), hd = P(xs, h0 + 1.0, z + lean * 0.32);
-    const tipY = sn > 0 ? -0.12 : 0.08 + 0.45 * (-sn), tipZ = z + lean * 0.95 + 0.15;
-    const grip = P(xs + sd * 0.1, h0 + 0.92, z + lean * 0.5), hand = P(xs + sd * 0.38, h0 + 0.52, z + lean * 0.6);
-    const tip = P(xs + sd * 1.08, tipY, tipZ), bl = P(xs + sd * 0.88, tipY + 0.34, tipZ);
-    ctx.lineCap = 'round';
-    seg(grip, tip, '#d9b47a', s * 0.07); seg(bl, tip, '#c99a55', s * 0.16);
-    seg(hip, sh, b.shirt || b.color, s * 0.4); seg(sh, hand, '#e8b98f', s * 0.1);
-    if (hd) { dot(hd, s * 0.165, '#2a1c12'); ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(0.6, s * 0.055); ctx.beginPath();
-      ctx.moveTo(hd.x - s * 0.165, hd.y - s * 0.02); ctx.lineTo(hd.x + s * 0.165, hd.y - s * 0.02); ctx.lineTo(hd.x + s * 0.25, hd.y + s * 0.08); ctx.stroke(); }
+  function paddler(b, B, t, sd, ph, bob) {
+    const z = t * L, h0 = hullH(t) - 0.2 + bob, lean = Math.cos(ph), sn = Math.sin(ph);
+    const hip = B(sd * 0.32, h0, z); if (!hip) return; const s = hip.s;
+    const sh = B(sd * 0.3, h0 + 0.68, z + 0.18 + lean * 0.22), hd = B(sd * 0.3, h0 + 0.98, z + 0.24 + lean * 0.28);
+    // short ~1 m paddle (櫂): longer near bow/stern where the hull is higher
+    const plen = 1.0 + Math.abs(t - 0.45) * 0.7, inWater = sn > 0;
+    const grip = B(sd * 0.36, h0 + 0.95, z + lean * 0.45), tipY = inWater ? -0.18 : 0.15 + 0.35 * (-sn);
+    const tip = B(sd * (0.78 + plen * 0.12), tipY, z + lean * 0.75 + 0.1), bl = B(sd * (0.72 + plen * 0.1), tipY + 0.32, z + lean * 0.72 + 0.1);
+    const hand = B(sd * 0.55, h0 + 0.5, z + lean * 0.6);
+    ctx.lineCap = 'round'; seg(grip, tip, '#d9b47a', s * 0.07); seg(bl, tip, '#b98a48', s * 0.15);
+    seg(hip, sh, b.color, s * 0.4); seg(sh, hand, '#e8b98f', s * 0.1);
+    if (hd) { dot(hd, s * 0.16, '#2a1c12'); ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(0.6, s * 0.055); ctx.beginPath();
+      ctx.moveTo(hd.x - s * 0.16, hd.y - s * 0.02); ctx.lineTo(hd.x + s * 0.16, hd.y - s * 0.02); ctx.lineTo(hd.x + s * 0.24, hd.y + s * 0.08); ctx.stroke(); }
   }
-  function drummer(b, t, ph, bob) {
-    const z = b.z + t * BOAT_L, h0 = hullH(t) - 0.1 + bob, dc = P(b.x, h0 + 0.6, z + 0.55); if (!dc) return; const s = dc.s;
-    ctx.beginPath(); ctx.ellipse(dc.x, dc.y, s * 0.4, s * 0.34, 0, 0, 6.3); ctx.fillStyle = '#8b2a1d'; ctx.fill();
-    ctx.beginPath(); ctx.ellipse(dc.x, dc.y - s * 0.2, s * 0.38, s * 0.11, 0, 0, 6.3); ctx.fillStyle = '#ead6ae'; ctx.fill();
-    const gp = P(b.x + 0.5, h0 + 1.1, z + 0.25); seg(P(b.x + 0.5, h0, z + 0.25), P(b.x + 0.5, h0 + 1.6, z + 0.25), '#5a3a1a', s * 0.06);
-    if (gp) { dot(gp, s * 0.28, '#c9962a'); dot(gp, s * 0.19, '#e9c25a'); dot(gp, s * 0.06, '#a57a1c'); }
-    const hip = P(b.x, h0 + 0.55, z), sh = P(b.x, h0 + 1.3, z), hd = P(b.x, h0 + 1.6, z);
-    seg(hip, sh, '#fff', s * 0.4);
-    const up = Math.sin(ph * 2) > 0;
-    seg(sh, P(b.x - 0.28, h0 + (up ? 1.7 : 1.0), z + 0.4), '#e8b98f', s * 0.1); seg(sh, P(b.x + 0.28, h0 + (up ? 1.0 : 1.7), z + 0.4), '#e8b98f', s * 0.1);
-    if (hd) { dot(hd, s * 0.165, '#2a1c12'); ctx.strokeStyle = b.color; ctx.lineWidth = Math.max(0.6, s * 0.06); ctx.beginPath(); ctx.moveTo(hd.x - s * 0.165, hd.y - s * 0.03); ctx.lineTo(hd.x + s * 0.165, hd.y - s * 0.03); ctx.stroke(); }
-  }
-  function steersman(b, bob) {
-    const t = 0.04, z = b.z + t * BOAT_L, h0 = hullH(t) + bob, sx = b.x + 0.36;
-    const hip = P(sx, h0 + 0.35, z); if (!hip) return; const s = hip.s;
-    const sh = P(sx, h0 + 1.0, z), hd = P(sx, h0 + 1.25, z), hand = P(sx + 0.3, h0 + 0.8, z - 0.2), end = P(sx + 0.75, -0.1, z - 3.0);
-    seg(hand, end, '#c99a55', s * 0.09); seg(hip, sh, b.dark, s * 0.36); seg(sh, hand, '#e8b98f', s * 0.09); if (hd) dot(hd, s * 0.15, '#2a1c12');
-  }
-  function flag(b, bob) {
-    const t = 0.97, z = b.z + t * BOAT_L, h = hullH(t) + bob, p0 = P(b.x, h, z), p1 = P(b.x, h + 2.3, z); if (!p0 || !p1) return; const s = p1.s;
-    seg(p0, p1, '#eee', s * 0.06);
-    const pts = [], N = 6, wv = u => Math.sin(S.time * 6 + u * 4 + b.lane) * 0.12 * u * (1 + b.v / 10);
-    for (let i = 0; i <= N; i++) { const u = i / N; pts.push(P(b.x + u * 1.15, h + 2.25 + wv(u), z + wv(u))); }
-    for (let i = N; i >= 0; i--) { const u = i / N; pts.push(P(b.x + u * 1.15, h + 1.55 + wv(u), z + wv(u))); }
-    poly(pts, b.color, '#fff', Math.max(0.5, s * 0.03));
-    const c = P(b.x + 0.58, h + 1.9, z); if (c) { const k = sprite('k' + b.kanji, 40, 40, g => { g.fillStyle = '#fff'; g.font = '900 34px "M PLUS Rounded 1c",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(b.kanji, 20, 22); });
-      const sz = Math.max(7, s * 0.55); ctx.drawImage(k, c.x - sz / 2, c.y - sz / 2, sz, sz); }
+  function standing(B, x, t, bob, shirt, band, arm) {    // a standing crew member; arm(h0,z) draws their tool
+    const z = t * L, h0 = hullH(t) - 0.15 + bob, hip = B(x, h0 + 0.45, z); if (!hip) return; const s = hip.s;
+    const sh = B(x, h0 + 1.25, z), hd = B(x, h0 + 1.55, z); seg(hip, sh, shirt, s * 0.38); if (arm) arm(sh, h0, z, s);
+    if (hd) { dot(hd, s * 0.16, '#2a1c12'); ctx.strokeStyle = band; ctx.lineWidth = Math.max(0.6, s * 0.06); ctx.beginPath(); ctx.moveTo(hd.x - s * 0.16, hd.y - s * 0.03); ctx.lineTo(hd.x + s * 0.16, hd.y - s * 0.03); ctx.stroke(); }
   }
   function boat(b) {
-    const bob = Math.sin(S.time * 1.7 + b.lane * 1.3) * 0.04;
-    const tStart = Math.max(0, (cam.z + 1.6 - b.z) / BOAT_L); if (tStart > 0.93) return;
-    const N = 18, GL = [], GR = [], WL = [], WR = [], IL = [], IR = [];
-    for (let i = 0; i <= N; i++) { const t = tStart + (1 - tStart) * i / N, z = b.z + t * BOAT_L, w = hullW(t), h = hullH(t) + bob;
-      GL.push(P(b.x - w, h, z)); GR.push(P(b.x + w, h, z)); WL.push(P(b.x - w * 0.8, 0, z)); WR.push(P(b.x + w * 0.8, 0, z));
-      IL.push(P(b.x - w * 0.55, h - 0.05, z)); IR.push(P(b.x + w * 0.55, h - 0.05, z)); }
-    if (tStart === 0) wake(b);
-    poly([...GL, ...WL.slice().reverse()], b.dark); poly([...GR, ...WR.slice().reverse()], b.dark);
-    if (tStart === 0) poly([GL[0], GR[0], WR[0], WL[0]], b.color, 'rgba(0,0,0,.2)', 1);
-    poly([...GL, ...GR.slice().reverse()], '#7a4e26'); poly([...IL, ...IR.slice().reverse()], '#9a6a38');
+    const B0 = LF({ px: b.px, py: b.py, hd: b.hd }, L), bob = Math.sin(S.time * 1.7 + b.lane * 1.3) * 0.04;
+    const B = (x, y, z) => B0(x, y + (y > 0.01 ? bob : 0), z);
+    const N = 20, GL = [], GR = [], WLp = [], WRp = [], IL = [], IR = [];
+    for (let i = 0; i <= N; i++) { const t = i / N, z = t * L, w = hullW(t), h = hullH(t);
+      GL.push(B(-w, h, z)); GR.push(B(w, h, z)); WLp.push(B(-w * 0.8, 0, z)); WRp.push(B(w * 0.8, 0, z)); IL.push(B(-w * 0.55, h - 0.08, z)); IR.push(B(w * 0.55, h - 0.08, z)); }
+    const ok = a => a.filter(Boolean);
+    wake(b, B);
+    const wood = '#c9965a', woodD = '#9c6c38';
+    poly(ok([...GL, ...WLp.slice().reverse()]), woodD); poly(ok([...GR, ...WRp.slice().reverse()]), woodD);
+    poly(ok([GL[0], GR[0], WRp[0], WLp[0]]), wood, 'rgba(0,0,0,.2)', 1);
+    poly(ok([...GL, ...GR.slice().reverse()]), '#7a4e26'); poly(ok([...IL, ...IR.slice().reverse()]), '#a8753f');
     ctx.lineCap = 'round';
-    for (let i = 1; i <= N; i++) { seg(GL[i - 1], GL[i], '#fff', GL[i].s * 0.07); seg(GR[i - 1], GR[i], '#fff', GR[i].s * 0.07); }
-    const items = [[0.97, () => flag(b, bob)], [0.5, () => drummer(b, 0.5, b.phase, bob)], [0.04, () => steersman(b, bob)]];
-    [0.86, 0.79, 0.72, 0.65, 0.58, 0.42, 0.35, 0.28, 0.21, 0.14].forEach(t => items.push([t, () => { rower(b, t, -1, b.phase, bob); rower(b, t, 1, b.phase, bob); }]));
-    items.sort((a, c) => c[0] - a[0]).forEach(([t, fn]) => { if (t >= tStart) fn(); });
-    // name tag (cached sprite)
-    const lp = P(b.x, 3.1, b.z + 1.6);
-    if (lp) {
-      const font = '800 24px "M PLUS Rounded 1c",sans-serif', tw = measure(font, b.name) + 28, th = 38;
+    for (let i = 1; i <= N; i++) { if (GL[i - 1] && GL[i]) seg(GL[i - 1], GL[i], b.color, GL[i].s * 0.12); if (GR[i - 1] && GR[i]) seg(GR[i - 1], GR[i], b.color, GR[i].s * 0.12); }
+    // team crest painted on both sides of the bow
+    [-1, 1].forEach(sd => { const c = B(sd * hullW(0.9) * 0.95, hullH(0.9) * 0.55, 0.9 * L); if (c) { dot(c, c.s * 0.26, '#fff'); dot(c, c.s * 0.2, b.color); } });
+    const items = [];
+    // 13 pairs of paddlers = 26 (seats from bow to stern, gap amidships for the drum & gong)
+    const seats = []; for (let i = 0; i < 13; i++) seats.push(0.88 - i * 0.056 - (i >= 6 ? 0.07 : 0));
+    seats.forEach(t => items.push([t, () => { paddler(b, B, t, -1, b.phase, bob); paddler(b, B, t, 1, b.phase, bob); }]));
+    const up = Math.sin(b.phase * 2) > 0;
+    // 太鼓 (drum) and its drummer
+    items.push([0.52, () => { const dc = B(0, hullH(0.53) + 0.45, 0.53 * L); if (dc) { const s = dc.s;
+      ctx.beginPath(); ctx.ellipse(dc.x, dc.y, s * 0.4, s * 0.34, 0, 0, 6.3); ctx.fillStyle = '#8b2a1d'; ctx.fill();
+      ctx.beginPath(); ctx.ellipse(dc.x, dc.y - s * 0.2, s * 0.38, s * 0.11, 0, 0, 6.3); ctx.fillStyle = '#ead6ae'; ctx.fill(); }
+      standing(B, -0.05, 0.5, bob, '#fff', b.color, (sh, h0, z) => { seg(sh, B(-0.3, h0 + (up ? 1.7 : 1.0), z + 0.4), '#e8b98f', sh.s * 0.1); seg(sh, B(0.25, h0 + (up ? 1.0 : 1.7), z + 0.4), '#e8b98f', sh.s * 0.1); }); }]);
+    // ドラ (gong) and its player
+    items.push([0.47, () => { const g = B(0.35, hullH(0.47) + 1.0, 0.47 * L), f0 = B(0.35, hullH(0.47), 0.47 * L), f1 = B(0.35, hullH(0.47) + 1.5, 0.47 * L);
+      seg(f0, f1, '#5a3a1a', (f1 || { s: 1 }).s * 0.06); if (g) { dot(g, g.s * 0.28, '#c9962a'); dot(g, g.s * 0.19, '#e9c25a'); dot(g, g.s * 0.06, '#a57a1c'); }
+      standing(B, 0.0, 0.44, bob, '#fff', b.color, (sh, h0, z) => seg(sh, B(0.3, h0 + (up ? 1.0 : 1.35), z + 0.2), '#e8b98f', sh.s * 0.1)); }]);
+    // 采振り: stands near the bow waving the 采配 to the beat
+    items.push([0.93, () => standing(B, 0, 0.93, bob, b.dark, '#fff', (sh, h0, z, s) => { const tip = B(Math.sin(b.phase) * 0.5, h0 + 2.2, z + 0.2);
+      seg(sh, tip, '#e8b98f', s * 0.1); if (tip) for (let k = 0; k < 5; k++) seg(tip, { x: tip.x + (k - 2) * s * 0.06, y: tip.y + s * 0.35 }, '#fff', s * 0.05); })]);
+    // centre post with the team flag
+    items.push([0.5, () => { const p0 = B(0, hullH(0.5), 0.5 * L), p1 = B(0, hullH(0.5) + 2.6, 0.5 * L); if (!p0 || !p1) return; seg(p0, p1, '#eee', p1.s * 0.06);
+      const wv = u => Math.sin(S.time * 6 + u * 4 + b.lane) * 0.1 * u * (1 + b.v / 10), pts = [];
+      for (let i = 0; i <= 5; i++) { const u = i / 5; pts.push(B(u * 1.0 + wv(u), hullH(0.5) + 2.55, 0.5 * L - u * 0.3)); }
+      for (let i = 5; i >= 0; i--) { const u = i / 5; pts.push(B(u * 1.0 + wv(u), hullH(0.5) + 1.95, 0.5 * L - u * 0.3)); }
+      poly(ok(pts), b.color, '#fff', Math.max(0.5, p1.s * 0.03));
+      const c = B(0.5, hullH(0.5) + 2.25, 0.5 * L - 0.15); if (c) { const k = sprite('k' + b.kanji, 40, 40, g => { g.fillStyle = '#fff'; g.font = '900 32px "M PLUS Rounded 1c",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(b.kanji, 20, 22); });
+        const sz = Math.max(6, c.s * 0.5); ctx.drawImage(k, c.x - sz / 2, c.y - sz / 2, sz, sz); } }]);
+    // あか汲み (bailer) scooping with a bucket, and the 舵取り with the long steering oar at the stern
+    items.push([0.1, () => { const z = 0.1 * L, h0 = hullH(0.1) - 0.2 + bob, hip = B(0.15, h0 + 0.2, z); if (!hip) return; const s = hip.s;
+      const dip = Math.max(0, Math.sin(S.time * 3 + b.lane)); const sh = B(0.15, h0 + 0.75 - dip * 0.25, z + 0.2), hd = B(0.15, h0 + 1.0 - dip * 0.3, z + 0.3);
+      seg(hip, sh, b.dark, s * 0.34); const bk = B(0.4, h0 + 0.3 + dip * 0.2, z + 0.3); seg(sh, bk, '#e8b98f', s * 0.09); if (bk) { ctx.fillStyle = '#6b8fb3'; ctx.fillRect(bk.x - s * 0.12, bk.y - s * 0.1, s * 0.24, s * 0.2); } if (hd) dot(hd, s * 0.15, '#2a1c12'); }]);
+    items.push([0.02, () => standing(B, 0.3, 0.03, bob, b.dark, '#fff', (sh, h0, z, s) => { const hand = B(0.6, h0 + 0.85, z - 0.2), end = B(0.95, -0.1, z - 3.0); seg(hand, end, '#b98a48', s * 0.09); seg(sh, hand, '#e8b98f', s * 0.09); })]);
+    items.sort((a, c) => c[0] - a[0]).forEach(([, fn]) => fn());
+    // team name tag
+    const lp = B(0, 3.3, L * 0.18);
+    if (lp) { const font = '800 24px "M PLUS Rounded 1c",sans-serif', tw = measure(font, b.name) + 28, th = 38;
       const c = sprite('tag' + b.name + b.isPlayer, tw + 4, th + 12, g => {
-        g.fillStyle = b.isPlayer ? '#ffd23f' : 'rgba(0,0,0,.6)'; g.strokeStyle = '#fff'; g.lineWidth = 3;
+        g.fillStyle = b.isPlayer ? '#ffd23f' : 'rgba(0,0,0,.62)'; g.strokeStyle = '#fff'; g.lineWidth = 3;
         g.beginPath(); g.roundRect ? g.roundRect(2, 2, tw, th, 19) : g.rect(2, 2, tw, th); g.fill(); if (b.isPlayer) g.stroke();
         if (b.isPlayer) { g.beginPath(); g.moveTo(tw / 2 - 6, th + 1); g.lineTo(tw / 2 + 2, th + 10); g.lineTo(tw / 2 + 10, th + 1); g.fill(); }
         g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = b.isPlayer ? '#3a2a00' : '#fff'; g.fillText(b.name, tw / 2 + 2, th / 2 + 3); });
-      const k = Math.max(0.45, Math.min(1, lp.s / 60)); ctx.drawImage(c, lp.x - c.lw * k / 2, lp.y - th * k / 2, c.lw * k, c.lh * k);
-    }
+      const k = Math.max(0.45, Math.min(1, lp.s / 55)); ctx.drawImage(c, lp.x - c.lw * k / 2, lp.y - th * k / 2, c.lw * k, c.lh * k); }
   }
 
-  /* ---------------- particles & effects ---------------- */
+  /* ---------------- water & particles ---------------- */
+  function drawWater() {
+    const g = ctx.createLinearGradient(0, HOR, 0, H); g.addColorStop(0, '#8fc6dc'); g.addColorStop(0.07, '#4f9fc3'); g.addColorStop(1, '#155d8c');
+    ctx.fillStyle = g; ctx.fillRect(0, HOR, W, H - HOR);
+    // skyline reflection
+    ctx.save(); ctx.globalAlpha = 0.16; ctx.setTransform(RES, 0, 0, -RES * 0.35, 0, (HOR * 1.35 + 1) * RES); ctx.drawImage(cv, 0, 0, cv.width, HOR * RES, 0, 0, W, HOR); ctx.restore();
+    ctx.setTransform(RES, 0, 0, RES, 0, 0);
+    const pan = cam.h * 0.35, base = Math.floor(S.travelled / 2.6), frac = S.travelled - base * 2.6;
+    for (let i = 52; i >= 1; i--) { const zi = base + i, z = i * 2.6 - frac; if (z < 1.2) continue; const s = F / z;
+      ctx.fillStyle = '#fff'; ctx.globalAlpha = Math.min(0.3, s / 120) * (s > 40 ? 0.6 : 1);
+      for (let k = -11; k <= 11; k++) { const x = k * 2.8 + (hash(zi, k) - 0.5) * 2 + Math.sin(S.time * 0.9 + zi + k) * 0.18 + (pan % 2.8);
+        const px = W / 2 + x * s, w = Math.min(36, (0.35 + hash(zi, k + 50) * 0.9) * s); ctx.fillRect(px - w / 2, HOR + CAMH * s, w, Math.max(1, 0.05 * s)); } }
+    ctx.globalAlpha = 1;
+  }
   function splash(b, n, force = 1, gold) {
-    for (let i = 0; i < n; i++) { const sd = Math.random() < 0.5 ? -1 : 1, t = 0.14 + Math.random() * 0.72;
-      S.parts.push({ x: b.x + sd * (1.2 + Math.random() * 0.3), y: 0.05, z: b.z + t * BOAT_L, vx: sd * Math.random() * 1.2, vy: (1.5 + Math.random() * 2) * force, vz: -1 - Math.random() * 2, life: 0.5 + Math.random() * 0.4, gold }); }
+    const f = fwd(b.hd), r = rgt(b.hd);
+    for (let i = 0; i < n; i++) { const sd = Math.random() < 0.5 ? -1 : 1, t = 0.12 + Math.random() * 0.74, lz = t * L - L / 2, lx = sd * (0.95 + Math.random() * 0.3);
+      S.parts.push({ x: b.px + r[0] * lx + f[0] * lz, y: b.py + r[1] * lx + f[1] * lz, h: 0.05, vx: r[0] * sd * Math.random() * 1.2 - f[0] * 1.5, vy: r[1] * sd * Math.random() * 1.2 - f[1] * 1.5,
+        vh: (1.5 + Math.random() * 2) * force, life: 0.5 + Math.random() * 0.4, gold }); }
   }
-  function bowSpray(b) {
+  function bowSpray(b) { const f = fwd(b.hd), r = rgt(b.hd);
     for (let i = 0; i < 3; i++) { const sd = Math.random() < 0.5 ? -1 : 1;
-      S.parts.push({ x: b.x + sd * 0.3, y: 0.2, z: b.z + BOAT_L * 0.97, vx: sd * (1.5 + Math.random() * 2), vy: 2 + Math.random() * 2.5, vz: -2, life: 0.6, gold: true }); }
-  }
+      S.parts.push({ x: b.px + f[0] * L * 0.48 + r[0] * sd * 0.3, y: b.py + f[1] * L * 0.48 + r[1] * sd * 0.3, h: 0.2, vx: r[0] * sd * 2.5, vy: r[1] * sd * 2.5, vh: 2 + Math.random() * 2.5, life: 0.6, gold: true }); } }
   function drawParts(dt) {
-    for (const p of S.parts) { p.vy -= 9 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; p.life -= dt; }
-    S.parts = S.parts.filter(p => p.life > 0 && p.y > -0.2);
-    for (const p of S.parts) { const q = P(p.x, p.y, p.z); if (!q) continue; ctx.globalAlpha = Math.min(1, p.life * 2) * 0.9;
-      dot(q, Math.max(0.8, q.s * (p.gold ? 0.09 : 0.07)), p.gold ? '#fff7c2' : '#fff'); }
+    for (const p of S.parts) { p.vh -= 9 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.h += p.vh * dt; p.life -= dt; }
+    S.parts = S.parts.filter(p => p.life > 0 && p.h > -0.2);
+    for (const p of S.parts) { const q = PW(p.x, p.y, p.h); if (!q) continue; ctx.globalAlpha = Math.min(1, p.life * 2) * 0.9; dot(q, Math.max(0.8, q.s * (p.gold ? 0.09 : 0.07)), p.gold ? '#fff7c2' : '#fff'); }
     ctx.globalAlpha = 1;
   }
   function speedLines() {
     if (S.boostFx <= 0.01) return;
-    ctx.save(); ctx.globalAlpha = Math.min(0.6, S.boostFx); ctx.strokeStyle = '#fff'; ctx.lineCap = 'round';
-    for (let i = 0; i < 26; i++) {
-      const a = hash(i, Math.floor(S.time * 14)) * Math.PI * 2, r0 = 240 + hash(i, 3) * 200, len = 60 + hash(i, 5) * 120;
-      const cx = W / 2, cy = HOR + 60, x0 = cx + Math.cos(a) * r0 * 1.6, y0 = cy + Math.sin(a) * r0 * 0.7;
-      if (y0 < HOR - 20) continue;
-      ctx.lineWidth = 2 + hash(i, 9) * 3; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0 + Math.cos(a) * len * 1.6, y0 + Math.sin(a) * len * 0.7); ctx.stroke();
+    ctx.save(); ctx.globalAlpha = Math.min(0.55, S.boostFx); ctx.strokeStyle = '#fff'; ctx.lineCap = 'round';
+    for (let i = 0; i < 24; i++) { const a = hash(i, Math.floor(S.time * 14)) * Math.PI * 2, r0 = 240 + hash(i, 3) * 200, len = 60 + hash(i, 5) * 120;
+      const x0 = W / 2 + Math.cos(a) * r0 * 1.6, y0 = HOR + 60 + Math.sin(a) * r0 * 0.7; if (y0 < HOR - 20) continue;
+      ctx.lineWidth = 2 + hash(i, 9) * 3; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0 + Math.cos(a) * len * 1.6, y0 + Math.sin(a) * len * 0.7); ctx.stroke(); }
+    ctx.restore();
+  }
+  function drawLabels() {
+    if (S.labelA <= 0.02) return;
+    ctx.save(); ctx.globalAlpha = S.labelA;
+    const font = '800 14px "M PLUS Rounded 1c", sans-serif', placed = [];
+    for (const [x, y, h, txt] of LANDNAME) {
+      const p = PW(x, y, h); if (!p || p.z < 60 || p.x < 40 || p.x > W - 40) continue;
+      const w = measure(font, txt) + 16; let ly = Math.max(16, p.y - 16);
+      for (const q of placed) if (Math.abs(q[0] - p.x) < (q[1] + w) / 2 && Math.abs(q[2] - ly) < 22) ly = q[2] - 24;
+      placed.push([p.x, w, ly]);
+      const c = sprite('lab' + txt, w, 30, g => { g.fillStyle = 'rgba(255,255,255,0.93)'; g.beginPath(); g.roundRect ? g.roundRect(0, 0, w, 22, 11) : g.rect(0, 0, w, 22); g.fill();
+        g.beginPath(); g.moveTo(w / 2 - 5, 22); g.lineTo(w / 2, 28); g.lineTo(w / 2 + 5, 22); g.fill();
+        g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#21435e'; g.fillText(txt, w / 2, 12); });
+      ctx.drawImage(c, p.x - w / 2, ly - 11, w, 30);
     }
     ctx.restore();
   }
@@ -449,54 +411,45 @@ const Scene = (() => {
   /* ---------------- public API ---------------- */
   function resize(scale) {
     RES = Math.min(2, Math.max(1, (window.devicePixelRatio || 1) * scale));
-    if (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4) RES = Math.min(RES, 1.25);   // Chromebooks
-    cv.width = Math.round(W * RES); cv.height = Math.round(H * RES);
-    paintPanorama();
+    if (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4) RES = Math.min(RES, 1.25);
+    cv.width = Math.round(W * RES); cv.height = Math.round(H * RES); paintSky(); SPR.clear();
   }
   function init(canvas) { cv = canvas; ctx = cv.getContext('2d'); }
-  function setRace(o) { S.boats = o.boats; S.turnZ = o.turnZ; S.buoyZ = o.turnZ + BOAT_L + 1.5; S.finishZ = o.finishZ; S.leg = 1; cam.yaw = LEG1; S.yawT = 1; S.parts = []; S.boostFx = 0; S.labelT = 0; }
-  function startTurn() { S.leg = 2; S.yawFrom = cam.yaw; S.yawT = 0; S.labelT = 0; }
+  function setRace(o) { S.boats = o.boats; S.parts = []; S.boostFx = 0; S.labelT = 0; S.travelled = 0; cam.smoothH = Course.H1; }
+  // camera: behind the player's boat, heading lags behind the boat so you SEE it swing round at the turn
   function update(dt, player, opts = {}) {
-    S.time += dt;
-    cam.z = player.z - 9.9;
-    if (S.yawT < 1) { S.yawT = Math.min(1, S.yawT + dt / 1.6); const e = S.yawT < 0.5 ? 4 * S.yawT ** 3 : 1 - (-2 * S.yawT + 2) ** 3 / 2;
-      cam.yaw = (S.yawFrom + angDiff(LEG2, S.yawFrom) * e + 360) % 360; }
-    else if (opts.idle) cam.yaw = (LEG1 + Math.sin(S.time * 0.12) * 28 + 360) % 360;
-    else cam.yaw = S.leg === 1 ? LEG1 : LEG2;
+    S.time += dt; S.travelled += player.v * dt;
+    if (cam.smoothH === undefined) cam.smoothH = player.hd;
+    let target = player.hd;
+    if (opts.idle) target = Course.H1 + Math.sin(S.time * 0.12) * 32;
+    cam.smoothH += angDiff(target, cam.smoothH) * Math.min(1, dt * (opts.idle ? 3 : 1.8));
+    const f = fwd(cam.smoothH), r = rgt(cam.smoothH), back = 9.9 + L / 2;
+    setCam(player.px - f[0] * back + r[0] * 1.6, player.py - f[1] * back + r[1] * 1.6, cam.smoothH);
     S.boostFx += ((player.boost > 0 ? 1 : 0) - S.boostFx) * Math.min(1, dt * 4);
     if (player.boost > 0 && Math.random() < 0.6) bowSpray(player);
     cam.shake = Math.max(0, cam.shake - dt * 3);
-    // landmark labels: always on the menus, shown for a few seconds at the start of each leg
-    S.labelT += dt; const wantL = !opts.idle && S.labelT < 6 ? 1 : 0;
+    S.labelT += dt; const wantL = opts.labels || (!opts.idle && S.labelT < 6) ? 1 : 0;
     S.labelA += (wantL - S.labelA) * Math.min(1, dt * 2);
   }
+  function showLabels() { S.labelT = 0; }
   function render(dt) {
     ctx.setTransform(RES, 0, 0, RES, 0, 0);
     if (cam.shake > 0) ctx.translate((Math.random() - 0.5) * cam.shake * 6, (Math.random() - 0.5) * cam.shake * 4);
-    drawSky(); drawLabels(); drawWater(); drawRopes();
-    const list = [];
-    // props for the current leg
-    if (S.leg === 1) {
-      // heading north from Matsugae: the east bank (city side) is on the RIGHT, open harbour on the left
-      list.push(...shore(1, [[-1e4, S.buoyZ + 400, Q]]));
-      if (cam.z < 40) { list.push(...crowd(1, -30, 30)); list.push([BOAT_L + 0.5, drawStartLine]); }
-      if (S.buoyZ - cam.z < 170) list.push([S.buoyZ, drawTurnBuoys]);
-      for (let k = 0; k < 60; k++) { const z = 30 + k * 37; if (z > S.buoyZ) break; list.push([z, () => fishingBoat(-(13 + hash(k, 1) * 3), z, k)]); }
-    } else {
-      // heading south back to Matsugae: the east bank is on the LEFT. After the goal the quay steps back
-      // to make a berth, and the cruise ship is docked there.
-      const fz = S.finishZ;
-      list.push(...shore(-1, [[S.turnZ - 50, fz + 6, Q], [fz + 6, fz + 400, 34]]));
-      list.push(...crowd(-1, fz - 70, fz + 5));
-      list.push([fz + 12, () => ship(-26, fz + 10, fz + 95)]);
-      if (fz - cam.z < 220) list.push([fz, () => drawGate(fz, 'GOAL  ゴール', '#e63946')]);
-      for (let k = 0; k < 60; k++) { const z = S.turnZ + 20 + k * 41; if (z > fz - 60) break; list.push([z, () => fishingBoat(13.5 + hash(k, 2) * 3, z, k + 2)]); }
-    }
-    for (const b of S.boats) list.push([b.z, () => boat(b)]);
-    list.filter(([z]) => z - cam.z < 230).sort((a, b) => b[0] - a[0]).forEach(([, fn]) => fn());
-    drawParts(dt);
-    speedLines();
+    drawSky(); drawLand(); drawWater();
+    // shore buildings + landmarks, far to near (drawn after the water so their bases sit on it)
+    const far = [];
+    for (const o of BUILD) { const z = depth(o.x, o.y); if (z > 30) far.push([z, () => facade(o)]); }
+    for (const [x, y, k] of CRANES) far.push([depth(x, y), () => crane(x, y, k)]);
+    far.push([depth(-1508, -2297), megami], [depth(131, -477), ouraCathedral], [depth(0, -577), gloverHouse], [depth(300, 520), dejimaWharf]);
+    far.sort((a, b) => b[0] - a[0]).forEach(([z, fn]) => { if (z > 30) fn(); });
+    shoreStrip(EAST); shoreStrip(WEST);
+    drawLabels();
+    const list = [...pierItems(), ...courseItems()];
+    // other crews that slide right past the camera (e.g. during the turn) are skipped so they don't fill the screen
+    for (const b of S.boats) { const z = depth(b.px, b.py); if (b.isPlayer || z > 9) list.push([z, () => boat(b)]); }
+    list.filter(([z]) => z > -20 && z < 900).sort((a, b) => b[0] - a[0]).forEach(([, fn]) => fn());
+    drawParts(dt); speedLines();
   }
-  function screenOf(b, y = 2.5) { return P(b.x, y, b.z + 3); }
-  return { init, resize, setRace, startTurn, update, render, splash, screenOf, cam, S, W, H, BOAT_L, LANES, shake: v => cam.shake = Math.max(cam.shake, v) };
+  function screenOf(b, y = 3.2) { return PW(b.px, b.py, y); }
+  return { init, resize, setRace, update, render, splash, screenOf, Course, L, showLabels, shake: v => cam.shake = Math.max(cam.shake, v), cam, S };
 })();

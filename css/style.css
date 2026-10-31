@@ -174,7 +174,7 @@ button{font-family:inherit;cursor:pointer;border:none}
 #resHead{font-family:var(--round);font-weight:800;font-size:58px;line-height:1.1;color:#c81d25}
 #resHead small{display:block;font-family:var(--jp);font-size:24px;color:#7a4e26}
 #podium{display:flex;justify-content:center;align-items:flex-end;gap:12px;margin:8px 0 6px;height:120px}
-.pod{width:150px;min-height:62px;border-radius:14px 14px 0 0;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:6px;font-weight:900}
+.pod{width:150px;min-height:62px;overflow:visible;border-radius:14px 14px 0 0;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:6px;font-weight:900}
 .pod b{font-family:var(--round);font-size:30px;line-height:1}
 .pod span{font-size:16px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pod.me{outline:5px solid var(--gold);outline-offset:-2px}
@@ -187,3 +187,8 @@ button{font-family:inherit;cursor:pointer;border:none}
 .rev button{width:36px;height:36px;border-radius:50%;background:#2fa7ff;color:#fff;font-size:16px;flex:none;box-shadow:0 3px 0 #0b5fb3}
 .perfect{text-align:center;font-weight:900;font-size:24px;color:#15803d;padding:8px}
 #loading{position:absolute;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;background:rgba(8,38,72,.6);color:#fff;font-weight:900;font-size:34px}
+
+#dist{position:absolute;right:0;top:46px;font-weight:900;font-size:20px;color:#fff;text-shadow:0 2px 0 rgba(0,0,0,.4);transform:translateY(4px)}
+.fact{font-weight:800;font-size:15px;color:#1d6fb8;background:#e6f2fb;border-radius:12px;padding:6px 12px}
+#results .fact{margin:4px 0 2px}
+.pod em{font-style:normal;font-size:13px;opacity:.9;font-family:var(--round)}

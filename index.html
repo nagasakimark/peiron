@@ -20,7 +20,7 @@
     <div id="combo"><span></span><span></span><span></span><em>BOOST!</em></div>
     <div id="track">
       <div class="lbl l">スタート</div><div class="lbl m">ターン</div><div class="lbl r">ゴール</div>
-      <div class="bar"><div class="turnmark"></div></div>
+      <div class="bar"><div class="turnmark" id="trackTurn"></div></div><div id="dist"></div>
       <div id="trackBoats"></div>
     </div>
   </div>
@@ -61,12 +61,13 @@
     <div class="setupBox">
       <div id="setupMode"></div>
       <div class="opts">
-        <div class="opt"><label>チームの なまえ</label><input id="nameIn" maxlength="10" placeholder="れい：Team Kappa" autocomplete="off" spellcheck="false"></div>
+        <div class="opt"><label>チームの なまえ</label><input id="nameIn" maxlength="10" placeholder="れい：Team Kappa・戸町" autocomplete="off" spellcheck="false" list="districts"><datalist id="districts"><option>野母崎</option><option>深堀</option><option>戸町</option><option>香焼</option><option>小ヶ倉</option><option>福田</option><option>三重</option><option>牧島</option><option>式見</option><option>小榊</option></datalist></div>
         <div class="opt"><label>ふねの いろ</label><div class="seg" id="segColor"></div></div>
-        <div class="opt"><label>レースの ながさ</label><div class="seg" id="segLen">
-          <button data-v="650">みじかい</button><button data-v="1000" class="on">ふつう</button><button data-v="1400">ながい</button></div></div>
+        <div class="opt"><label>コース</label><div class="seg" id="segLen">
+          <button data-v="0.5">れんしゅう 575m</button><button data-v="1" class="on">ほんばん 1150m</button></div></div>
         <div class="opt"><label>あいての つよさ</label><div class="seg" id="segCpu">
           <button data-v="0">やさしい</button><button data-v="1" class="on">ふつう</button><button data-v="2">つよい</button></div></div>
+        <div class="fact" id="factSetup"></div>
         <div class="how"><span>①</span> えらぶ <span>②</span> せいかいで スピードアップ！ <span>③</span> 3かい つづけて せいかいで ブースト！</div>
         <div class="setupBtns"><button class="big ghost" id="btnBack">もどる</button><button class="big go" id="btnStart">スタート！</button></div>
       </div>
@@ -80,6 +81,7 @@
       <div id="resHead"></div>
       <div id="podium"></div>
       <div id="resStats"></div>
+      <div class="fact" id="factRes"></div>
       <div class="revTitle">ふくしゅう Review</div>
       <div id="review"></div>
       <div class="setupBtns"><button class="big ghost" id="btnMenu">ほかの ゲーム</button><button class="big go" id="btnAgain">もういちど！</button></div>
