@@ -17,12 +17,12 @@ Each item lists the real-world fact (with a source), what the game did before, a
 ## Checklist
 | # | Area | Real thing | Before | Now |
 |---|---|---|---|---|
-| 1 | Course direction | From in front of Matsugae pier **out into the harbour** (west), round a buoy, and **back towards the pier** | ran north–south alongside the pier ❌ | ✅ heads out toward the Mitsubishi shipyard and comes back facing the pier |
+| 1 | Course direction | From in front of Matsugae pier **down the harbour toward the Megami Bridge**, round a buoy, and **back toward the pier** (course traced by Mark on Google Maps) | first ran along the pier, then across toward the shipyard ❌ | ✅ heads out at ≈222° with the Megami Bridge ahead and comes back at ≈42° |
 | 2 | Course length | 630 m out, 520 m back (finish ≈110 m further out than the start) | arbitrary ❌ | ✅ ほんばん 1150 m (630 / 520). れんしゅう is half scale |
 | 3 | Landmark positions | real positions | painted on a fixed ring at guessed angles ❌ | ✅ placed by real map coordinates, so their direction **and size change as you row** |
-| 4 | What you see going out | shipyard straight ahead, the World Heritage crane and Inasayama ahead-right | Inasayama ahead-left ❌ | ✅ |
-| 5 | What you see coming back | the pier, the terminal and its roof crowd ahead; Oura Cathedral, Glover Garden and Nabekanmuri on the right; Dejima and the city on the left | crowd on a quay alongside ❌ | ✅ |
-| 6 | Megami Bridge | far to the south-west, outside the view on both straights | dead ahead on the way back ❌ | ✅ swings past during the turn |
+| 4 | What you see going out | Megami Bridge ahead; the Minamiyamate / Nabekanmuri / Tomachi shore on the left; the Tategami / Kiba / Kozaki shore on the right | wrong direction ❌ | ✅ shorelines traced from the map |
+| 5 | What you see coming back | the Matsugae terminal, the stand and the roof crowd ahead-right, with Oura Cathedral and Glover Garden above them; Dejima Wharf, the station, Konpira-san and Inasayama ahead-left | crowd on a quay alongside ❌ | ✅ |
+| 6 | Megami Bridge | at the harbour mouth, ahead of the crews on the way out | ❌ | ✅ straight ahead on the way out, then behind you after the turn |
 | 7 | Cruise ship | the race is held in front of the cruise berth, so no ship can be docked there | ship docked by the finish ❌ | ✅ removed; a 遊覧船 (sightseeing boat) watches from beside the course instead |
 | 8 | The turn | each boat rounds **its own buoy**; long thin boats pivot slowly, and it's where races are won | the camera just spun ❌ | ✅ boats physically pivot round their buoy; right answers during the turn = ナイスターン (faster swing) |
 | 9 | Lanes after the turn | each boat comes back on its own side of its buoy | n/a | ✅ boats return on their own line, so lane order is mirrored |
@@ -40,6 +40,8 @@ Each item lists the real-world fact (with a source), what the game did before, a
 | 21 | Season | last Sunday of July: hot, big summer clouds | ✅ | ✅ |
 | 22 | Lane ropes | no evidence of continuous lane ropes | full rope lines ❌ | ✅ start/turn/finish buoys plus 50 m distance buoys at the course edges |
 | 23 | まめちしき | history: 1655, 白龍 (パイロン), crew sizes | none | ✅ rotating facts on the setup and results screens |
+
+| 24 | Buildings | stand on land along the shore | flat cut-outs floating on the water, jerky ❌ | ✅ land drawn between shore and hills; nearby buildings are real 3D boxes on the quay |
 
 ## Still to do (needs fal top-up)
 - Recorded 「ヨーイサー！」 crew shout and a real 太鼓/ドラ loop.

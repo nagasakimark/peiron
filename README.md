@@ -7,9 +7,9 @@ Play: open `index.html` (works by double-click too, or on GitHub Pages).
 
 ## The race course is real (see AUTHENTICITY.md)
 The 長崎ペーロン選手権大会 starts in front of **Matsugae pier (松が枝)**. Crews race out into the harbour, round a buoy and come back. Every landmark is placed from real map coordinates, so it moves and grows as you row.
-- **Out (heading west):** the Mitsubishi shipyard ahead, with the World Heritage giant cantilever crane and いなさやま (with its TV towers) ahead-right.
-- **Turn:** each crew pivots round its own buoy, and めがみおおはし swings past.
-- **Back (heading east):** the pier ahead, with the stand, the tents and the crowd on the terminal roof. おおうらてんしゅどう, グラバーえん and なべかんむりやま are on the right, でじまワーフ and the city on the left.
+- **Out (toward the Megami Bridge):** めがみおおはし straight ahead, with the Minamiyamate / なべかんむりやま / Tomachi shore on the left and the Tategami / Kiba side on the right.
+- **Turn:** each crew pivots round its own buoy, about 630 m out.
+- **Back (toward Matsugae):** the terminal, the stand and the crowd ahead-right, with おおうらてんしゅどう and グラバーえん on the hill above them. でじまワーフ, ながさきえき, こんぴらさん and いなさやま are ahead-left.
 
 ## Game sets
 | Set | Grammar | Textbook |
