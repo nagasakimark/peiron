@@ -176,9 +176,7 @@
   /* ---------- screens ---------- */
   const ALLSETS = () => [...QUESTION_SETS, MIX_SET];
   function modeCard(s, tag = 'button') {
-    const best = store.get('best', {})[s.id];
-    const medal = best ? `<div class="medal m${best.place}">${best.place}</div>` : '';
-    return `<${tag} class="mode" data-id="${s.id}" style="--c:${s.color}"><div class="ic">${stk(s.icon)}</div><div class="tx"><div class="en">${esc(s.en)}</div><div class="jp">${s.jp}</div><div class="u">${esc(s.unit)}</div></div>${medal}</${tag}>`;
+    return `<${tag} class="mode" data-id="${s.id}" style="--c:${s.color}"><div class="ic">${stk(s.icon)}</div><div class="tx"><div class="en">${esc(s.en)}</div><div class="jp">${s.jp}</div><div class="u">${esc(s.unit)}</div></div></${tag}>`;
   }
   function showTitle() {
     state = 'title'; stopVoice(); crowd(false);
