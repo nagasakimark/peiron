@@ -37,7 +37,7 @@ button{font-family:inherit;cursor:pointer;border:none}
 #track .lbl.l{left:0}#track .lbl.m{left:50%;transform:translateX(-50%)}#track .lbl.r{right:0}
 #trackBoats div{position:absolute;top:24px;width:24px;height:20px;margin-left:-12px;border-radius:40% 40% 50% 50%/30% 30% 70% 70%;border:3px solid #fff;transition:left .15s linear}
 #trackBoats div.me{top:20px;width:30px;height:26px;margin-left:-15px;border-color:var(--gold);z-index:2;box-shadow:0 0 0 3px #3a2a00}
-#topBtns{position:absolute;right:12px;top:12px;display:flex;gap:8px;z-index:30}
+#topBtns{position:absolute;right:12px;top:12px;display:flex;gap:8px;z-index:70}
 .rbtn{width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.92);box-shadow:0 3px 0 rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center}
 .rbtn svg{width:28px;height:28px;fill:var(--ink);stroke:var(--ink)}
 .rbtn .off{display:none}.rbtn.muted .on{display:none}.rbtn.muted .off{display:inline}
@@ -318,3 +318,11 @@ button{font-family:inherit;cursor:pointer;border:none}
 .rPair{display:grid;grid-template-columns:1fr 50px 1fr;align-items:center;background:#fff;border-radius:16px;padding:4px 14px;box-shadow:0 3px 0 rgba(0,0,0,.08);text-align:center}
 .rPair .en{font-size:36px}.rPair .now{color:#1d4f86}.rPair .ar{font-size:30px;font-weight:900;color:#ffb703}
 .rFr{padding:3px 18px}.rFreq{gap:6px}
+
+/* ---------------- QR modal ---------------- */
+#qr{z-index:60;background:rgba(8,38,72,.85);justify-content:center}
+.qrBox{background:#fffaf0;border-radius:30px;padding:20px 40px 24px;box-shadow:0 10px 0 rgba(0,0,0,.3);text-align:center;animation:cardPop .3s ease-out}
+.qrTitle{font-weight:900;font-size:34px;color:#c81d25;margin-bottom:10px}
+.qrCode{width:340px;height:340px;margin:0 auto;background:#fff;border-radius:18px;padding:14px;box-shadow:inset 0 0 0 4px #efe4cf}
+.qrCode svg{display:block;width:100%;height:100%}
+.qrUrl{font-family:var(--en);font-weight:700;font-size:17px;color:#7a4e26;margin:10px 0 12px;word-break:break-all;max-width:340px}

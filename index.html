@@ -28,6 +28,7 @@
   </div>
   <div id="topBtns">
     <button class="rbtn" id="btnSound" title="おと"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path class="on" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke-width="2.2" stroke-linecap="round"/><path class="off" d="M16.5 9.5l5 5m0-5l-5 5" stroke-width="2.4" stroke-linecap="round"/></svg></button>
+    <button class="rbtn" id="btnQr" title="QRコード"><svg viewBox="0 0 24 24"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3z" fill="none" stroke-width="2.4" stroke-linejoin="round"/><path d="M6 6h1v1H6zM17 6h1v1h-1zM6 17h1v1H6zM14 14h3v3h-3zM19 14h2v2h-2zM14 19h2v2h-2zM18 18h3v3h-3z" stroke-width="1"/></svg></button>
     <button class="rbtn" id="btnFull" title="ぜんがめん"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     <button class="rbtn hidden" id="btnHome" title="やめる"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke-width="3" stroke-linecap="round"/></svg></button>
   </div>
@@ -112,12 +113,23 @@
     </div>
   </div>
 
+  <!-- QR code -->
+  <div id="qr" class="screen hidden">
+    <div class="qrBox">
+      <div class="qrTitle">スマホで あそぼう！</div>
+      <div class="qrCode" id="qrCode"></div>
+      <div class="qrUrl" id="qrUrl"></div>
+      <button class="big go" id="btnQrOk">とじる</button>
+    </div>
+  </div>
+
   <div id="loading" class="hidden">よみこみちゅう…</div>
 </div>
 
 <script src="js/questions.js"></script>
 <script src="js/assets.js"></script>
 <script src="js/sfx.js"></script>
+<script src="js/qrcode.js"></script>
 <script src="js/lb-config.js"></script>
 <script src="js/leaderboard.js"></script>
 <script src="js/scene.js"></script>

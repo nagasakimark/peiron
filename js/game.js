@@ -261,6 +261,16 @@
   $('btnHome').onclick = () => { if (confirmQuit()) showTitle(); };
   function confirmQuit() { return true; }
   $('btnSound').onclick = () => { ac(); setMuted(!muted); };
+  // QR code to the game (uses the address the page is on, or the public one when opened from a file)
+  const GAME_URL = 'https://nagasakimark.github.io/peiron/';
+  function pageUrl() { return /^https?:/.test(location.protocol) && !/^(localhost|127\.)/.test(location.hostname) ? location.origin + location.pathname.replace(/index\.html$/, '') : GAME_URL; }
+  $('btnQr').onclick = () => {
+    const url = pageUrl(), qr = qrcode(0, 'M'); qr.addData(url); qr.make();
+    $('qrCode').innerHTML = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
+    $('qrUrl').textContent = url.replace(/^https?:\/\//, ''); $('qr').classList.remove('hidden'); sfx('click', 0.3);
+  };
+  const closeQr = () => $('qr').classList.add('hidden');
+  $('btnQrOk').onclick = closeQr; $('qr').addEventListener('click', e => { if (e.target === $('qr')) closeQr(); });
   $('btnFull').onclick = () => { const d = document, el = d.documentElement;
     if (!d.fullscreenElement) { const p = (el.requestFullscreen || el.webkitRequestFullscreen || (() => Promise.resolve())).call(el);
       Promise.resolve(p).then(() => screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape').catch(() => { })).catch(() => { }).finally(() => setTimeout(fit, 300)); }
@@ -368,6 +378,7 @@
     if (e.target.tagName === 'INPUT') return;
     if (e.key === '1' || e.key === 'ArrowLeft') choose(0);
     if (e.key === '2' || e.key === 'ArrowRight') choose(1);
+    if (e.key === 'Escape') { $('qr').classList.add('hidden'); $('rules').classList.add('hidden'); }
     if (e.key === 'Enter' && state === 'setup') startRace();
   });
   function updateCombo() {
