@@ -404,18 +404,21 @@ const Scene = (() => {
   // paddle / oar from top (u=0) to tip (u=1); draws the part between u0 and u1 that is above the water
   function shaft(K, top, tip, u0, u1, o) {
     const Bv = K.Bv, at = u => vLerp(top, tip, u), ub = o.ub || 0.6, uw = tip[1] < 0 ? top[1] / (top[1] - tip[1]) : 1.001;
-    const e = Math.min(u1, uw); if (e > u0) {
+    const e = Math.min(u1, uw);
+    if (e > u0) { const q0 = Bv(top); if (q0 && q0.s < 24 * DET) {          // a few pixels wide: the whole paddle is one stroke
+      if (u0 === 0) { ctx.lineCap = 'round'; seg(q0, Bv(at(Math.min(u1, uw, 1))), WOOD_S, q0.s * 0.07); } return; } }
+    if (e > u0) {
       const p0 = Bv(at(u0)); if (!p0) return; const s = p0.s;
-      if (u0 < ub) { if (s > 26 * DET) limb(p0, Bv(at(Math.min(e, ub))), WOOD, s * (o.w || 0.05)); else { ctx.lineCap = 'round'; seg(p0, Bv(at(Math.min(e, ub))), WOOD_S, s * 0.06); } if (u0 === 0 && o.grip && s > 40) limb(Bv(vA(top, [-0.07, 0, 0])), Bv(vA(top, [0.07, 0, 0])), WOOD_S, s * 0.05); }
+      if (u0 < ub) { if (s > 36 * DET) limb(p0, Bv(at(Math.min(e, ub))), WOOD, s * (o.w || 0.05)); else { ctx.lineCap = 'round'; seg(p0, Bv(at(Math.min(e, ub))), WOOD_S, s * 0.06); } if (u0 === 0 && o.grip && s > 40) limb(Bv(vA(top, [-0.07, 0, 0])), Bv(vA(top, [0.07, 0, 0])), WOOD_S, s * 0.05); }
       if (e > ub) { const ua = Math.max(u0, ub), hw = u => (o.bw || 0.08) * (1 - 0.25 * (u - ub) / (1 - ub)), X = o.bx || [1, 0, 0];
         const q = [Bv(vA(at(ua), vM(X, -hw(ua)))), Bv(vA(at(e), vM(X, -hw(e)))), Bv(vA(at(e), vM(X, hw(e)))), Bv(vA(at(ua), vM(X, hw(ua))))];
         if (e >= 1) q.splice(2, 0, Bv(vA(tip, vM(vN(vS(tip, top)), 0.05))));
         inkFill(q, o.blade || BLADE, Math.max(1.2, s * 0.028)); }
     }
     if (u1 >= uw && uw < 1 && o.splash !== undefined) {           // where it enters the water
-      const w = Bv(at(uw)); if (!w) return; const s = w.s;
+      const w = Bv(at(uw)); if (!w) return; const s = w.s; if (s < 9 * DET) return;
       ctx.globalAlpha = 0.85; ctx.beginPath(); ctx.ellipse(w.x, w.y, s * 0.2, s * 0.06, 0, 0, 6.283); ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1, s * 0.04); ctx.stroke(); ctx.globalAlpha = 1;
-      if (o.splash > 0) splashStar(w, s * 0.32 * o.splash, o.seed || 1);
+      if (o.splash > 0 && s > 20 * DET) splashStar(w, s * 0.32 * o.splash, o.seed || 1);
     }
   }
 
@@ -424,15 +427,15 @@ const Scene = (() => {
   function figure(K, P, parts) {
     const Bv = K.Bv, yaw = P.yaw || 0, cy = Math.cos(yaw), sy = Math.sin(yaw), fw0 = [sy, 0, cy], rt = [cy, 0, -sy];
     const ln = P.lean || 0, up = vA([0, Math.cos(ln), 0], vM(fw0, Math.sin(ln))), fw = vX(rt, up);
-    const H = P.hip, sp = P.spine || 0.55, tw = P.twist || 0, hp = Bv(H); if (!hp) return; const s = hp.s, hi = s > 26 * DET;
+    const H = P.hip, sp = P.spine || 0.55, tw = P.twist || 0, hp = Bv(H); if (!hp) return; const s = hp.s, hi = s > 38 * DET;
     const C1 = vA(H, vM(up, 0.03)), C2 = vA(H, vM(up, sp * 0.58)), C3 = vA(H, vM(up, sp)), C4 = vA(H, vM(up, sp + 0.05));
     const hc = vA(C4, [fw0[0] * 0.03, 0.15, fw0[2] * 0.03]), shirt = P.shirt, shirtS = shadeOf(shirt);
     (P.extra || []).forEach(([p, fn]) => { const q = Bv(p); if (q) parts.push([q.z, fn]); });
-    if (s < 11 * DET) {                                                          // far away: quick silhouette
-      parts.push([hp.z, () => { const t3 = Bv(C3), h = Bv(hc); limb(hp, t3, shirt, s * 0.34); if (h) { dot(h, s * 0.15, HAIR); seg({ x: h.x - s * 0.15, y: h.y - s * 0.03 }, { x: h.x + s * 0.15, y: h.y - s * 0.03 }, '#fff', s * 0.07); } }]);
+    if (s < 17 * DET) {                                                          // small on screen: quick silhouette
+      parts.push([hp.z, () => { const t3 = Bv(C3), h = Bv(hc); ctx.lineCap = 'round'; seg(hp, t3, shirt, s * 0.34); if (h) { dot(h, s * 0.15, HAIR); seg({ x: h.x - s * 0.15, y: h.y - s * 0.03 }, { x: h.x + s * 0.15, y: h.y - s * 0.03 }, '#fff', s * 0.07); } }]);
       return;
     }
-    const n = s > 45 * DET ? 10 : s > 20 * DET ? 7 : 6, ring = (c, rx, rz) => { const o = []; for (let i = 0; i < n; i++) { const a = i / n * 6.283, ca = Math.cos(a), sa = Math.sin(a);
+    const n = s > 60 * DET ? 10 : s > 32 * DET ? 7 : 5, ring = (c, rx, rz) => { const o = []; for (let i = 0; i < n; i++) { const a = i / n * 6.283, ca = Math.cos(a), sa = Math.sin(a);
       const p = vA(c, vA(vM(rt, rx * ca), vM(fw, rz * sa))); o.push([p, vA(vM(rt, ca / rx), vM(fw, sa / rz)), Bv(p)]); } return o; };
     const R1 = ring(C1, 0.15, 0.11), R2 = ring(C2, 0.205, 0.13), R3 = ring(C3, 0.2, 0.105), R4 = ring(C4, 0.11, 0.07);
     const seen = q => q[2] && vD(q[1], vS(K.cam, q[0])) > 0;
@@ -585,7 +588,7 @@ const Scene = (() => {
     const B0 = LF({ px: b.px, py: b.py, hd: b.hd }, L), bob = Math.sin(S.time * 1.7 + b.lane * 1.3) * 0.04;
     const B = (x, y, z) => B0(x, y + (y > 0.01 ? bob : 0), z), K = boatCtx(b, B), Bv = K.Bv;
     const near = K.cam[0] >= 0 ? 1 : -1, behind = K.cam[2] < L * 0.5;
-    const N = 22, G = { '-1': [], 1: [] }, W = { '-1': [], 1: [] }, I = { '-1': [], 1: [] }, Bd = { '-1': [], 1: [] }, Pn = { '-1': [], 1: [] };
+    const sBoat = (B(0, 0.5, L / 2) || { s: 20 }).s, N = sBoat > 30 * DET ? 22 : 12, G = { '-1': [], 1: [] }, W = { '-1': [], 1: [] }, I = { '-1': [], 1: [] }, Bd = { '-1': [], 1: [] }, Pn = { '-1': [], 1: [] };
     for (let i = 0; i <= N; i++) { const t = i / N, z = t * L, w = hullW(t), h = hullH(t);
       for (const sd of [-1, 1]) { G[sd].push(B(sd * w, h, z)); W[sd].push(B(sd * w * 0.8, 0, z)); I[sd].push(B(sd * w * 0.82, h - 0.06, z)); Bd[sd].push(B(sd * w * 0.985, h - 0.17, z)); Pn[sd].push(B(sd * w * 0.97, h - 0.22, z)); } }
     const ok = a => a.filter(Boolean), mid = B(0, 0.5, L / 2), lw = Math.max(1.4, (mid ? mid.s : 20) * 0.04);
@@ -597,7 +600,7 @@ const Scene = (() => {
       const g = ok(G[sd]), w = ok(W[sd]); if (g.length < 2 || w.length < 2) return;
       const lit = vD([sd, 0, 0], K.lt) > 0, s0 = mid ? mid.s : 20;
       inkFill([...g, ...w.slice().reverse()], lit ? WOOD : WOOD_S, lw);
-      ctx.globalAlpha = 0.45; for (const k of [0.45, 0.72]) { const pts = []; for (let i = 0; i <= N; i++) { const t = i / N; pts.push(B(sd * hullW(t) * (1 - 0.18 * k), hullH(t) * (1 - k), t * L)); } polyline(pts, WOOD_D, Math.max(0.8, s0 * 0.02)); } ctx.globalAlpha = 1;
+      ctx.globalAlpha = 0.45; if (s0 > 16 * DET) for (const k of [0.45, 0.72]) { const pts = []; for (let i = 0; i <= N; i++) { const t = i / N; pts.push(B(sd * hullW(t) * (1 - 0.18 * k), hullH(t) * (1 - k), t * L)); } polyline(pts, WOOD_D, Math.max(0.8, s0 * 0.02)); } ctx.globalAlpha = 1;
       poly(ok([...g, ...ok(Bd[sd]).reverse()]), b.color);                                        // team band under the gunwale
       polyline(ok(Bd[sd]), INK, Math.max(1, s0 * 0.022)); polyline(ok(Pn[sd]), '#fff', Math.max(0.8, s0 * 0.018));
       polyline(g, INK, lw * 1.1);
@@ -691,7 +694,7 @@ const Scene = (() => {
     for (let i = 52; i >= 1; i--) { const zi = base + i, z = i * 2.6 - frac; if (z < 1.2) continue; const s = F / z;
       ctx.fillStyle = '#fff'; ctx.globalAlpha = Math.min(0.3, s / 120) * (s > 40 ? 0.6 : 1);
       for (let k = -11; k <= 11; k++) { const x = k * 2.8 + (hash(zi, k) - 0.5) * 2 + Math.sin(S.time * 0.9 + zi + k) * 0.18 + (pan % 2.8);
-        const px = W / 2 + x * s, w = Math.min(36, (0.35 + hash(zi, k + 50) * 0.9) * s); ctx.fillRect(px - w / 2, HOR + CAMH * s, w, Math.max(1, 0.05 * s)); } }
+        const px = W / 2 + x * s, w = Math.min(36, (0.35 + hash(zi, k + 50) * 0.9) * s); if (px + w / 2 < 0 || px - w / 2 > W) continue; ctx.fillRect(px - w / 2, HOR + CAMH * s, w, Math.max(1, 0.05 * s)); } }
     ctx.globalAlpha = 1;
   }
   function splash(b, n, force = 1, gold) {
@@ -735,9 +738,12 @@ const Scene = (() => {
   }
 
   /* ---------------- public API ---------------- */
+  let _scale = 1, QRES = 1;                       // QRES < 1 only if even the lowest detail can't keep up
   function resize(scale) {
-    RES = Math.min(2, Math.max(1, (window.devicePixelRatio || 1) * scale));
+    if (scale) _scale = scale;
+    RES = Math.min(2, Math.max(1, (window.devicePixelRatio || 1) * _scale));
     if (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4) RES = Math.min(RES, 1.25);
+    RES = Math.max(0.6, RES * QRES);
     cv.width = Math.round(W * RES); cv.height = Math.round(H * RES); paintSky(); SPR.clear();
   }
   function init(canvas) { cv = canvas; ctx = cv.getContext('2d'); }
@@ -758,10 +764,24 @@ const Scene = (() => {
     S.labelA += (wantL - S.labelA) * Math.min(1, dt * 2);
   }
   function showLabels() { S.labelT = 0; }
-  let DET = 1, _ema = 16, _lastT = 0, _detT = 0;
+  /* Adaptive detail. DET scales every "is this big enough to draw in detail?" threshold, so a higher DET means simpler crews.
+     It reacts within half a second when frames run long, only climbs back down when there is plenty of headroom, and is
+     remembered between visits so a slow Chromebook starts at the right level instead of discovering it during the race. */
+  const DET_MAX = 3.4, DET_KEY = 'peiron_det';
+  let DET = 1, _ema = 16, _work = 4, _lastT = 0, _detT = 0, _hold = 0;
+  try { const v = parseFloat(localStorage.getItem(DET_KEY)); DET = v >= 1 && v <= DET_MAX ? v : ((navigator.hardwareConcurrency || 8) <= 4 ? 1.6 : 1); } catch (e) { }
+  function adapt(now, work) {
+    if (_lastT) { const f = now - _lastT; if (f < 250) _ema += (Math.min(f, 80) - _ema) * 0.12; } _lastT = now;
+    _work += (work - _work) * 0.1;
+    if (now - _detT < 450) return; _detT = now;
+    if (_ema > 21) {
+      if (DET < DET_MAX) { DET = Math.min(DET_MAX, DET * 1.3); _hold = now + 8000; save(); }
+      else if (_ema > 30 && QRES > 0.65) { QRES = Math.max(0.65, QRES - 0.15); _hold = now + 4000; resize(); }
+    } else if (now > _hold && _ema < 18.5 && _work < 7 && DET > 1) { DET = Math.max(1, DET / 1.12); _hold = now + 3000; save(); }
+  }
+  function save() { try { localStorage.setItem(DET_KEY, DET.toFixed(2)); } catch (e) { } }
   function render(dt) {
-    const now = performance.now(); if (_lastT) { const f = Math.min(100, now - _lastT); _ema = _ema * 0.94 + f * 0.06; } _lastT = now;
-    if (now - _detT > 1500) { _detT = now; if (_ema > 24 && DET < 2.2) DET = Math.min(2.2, DET + 0.4); else if (_ema < 15 && DET > 1) DET = Math.max(1, DET - 0.2); }
+    const t0 = performance.now();
     if (window.PEIRON_FIXDET) DET = window.PEIRON_FIXDET;
     ctx.setTransform(RES, 0, 0, RES, 0, 0);
     if (cam.shake > 0) ctx.translate((Math.random() - 0.5) * cam.shake * 6, (Math.random() - 0.5) * cam.shake * 4);
@@ -777,9 +797,10 @@ const Scene = (() => {
     drawWakes();
     const list = [...pierItems(), ...courseItems()];
     // other crews that slide right past the camera (e.g. during the turn) are skipped so they don't fill the screen
-    for (const b of S.boats) { const z = depth(b.px, b.py); if (b.isPlayer || z > 9) list.push([z, () => boat(b)]); }
+    for (const b of S.boats) { const z = depth(b.px, b.py); if (b.isPlayer || z > 9) list.push([z, () => { const d0 = DET; DET = b.isPlayer ? Math.min(d0, 1.7) : d0 * 1.35; boat(b); DET = d0; }]); }
     list.filter(([z]) => z > -20 && z < 900).sort((a, b) => b[0] - a[0]).forEach(([, fn]) => fn());
     drawParts(dt);
+    adapt(t0, performance.now() - t0);
   }
   // debug: view from any point/height, e.g. Scene.viewFrom(40, -330, 255, 50) = Glover Garden
   function viewFrom(x, y, h, height) { S.debugCam = { x, y, h, height }; }

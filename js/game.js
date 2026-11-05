@@ -297,7 +297,7 @@
     ac(); stopVoice(); sfx('click', 0.6);
     $('nameIn').blur();
     idleRace();
-    lbJob = null; cancelAnimationFrame(lbAnim); q = null; locked = true; qCount = 0; answered = 0; correctN = 0; streak = 0; missed = []; raceT = 0; endT = 0;
+    clearTimeout(adv.t); adv.fn = adv.cur = null; lbJob = null; cancelAnimationFrame(lbAnim); q = null; locked = true; qCount = 0; answered = 0; correctN = 0; streak = 0; missed = []; raceT = 0; endT = 0;
     deck = makeDeck(cfg.set);
     show(null); $('hud').classList.remove('hidden'); $('btnHome').classList.remove('hidden');
     $('setup').classList.add('hidden'); $('results').classList.add('hidden');
@@ -363,19 +363,30 @@
       sfx('wrong', 0.28); Scene.splash(player, 26, 0.6); popup('おしい！', 'bad');
     }
     updateCombo();
-    setTimeout(() => {
+    const advance = () => {
+      clearTimeout(adv.t); adv.fn = adv.cur = null;
       if (state !== 'race') return;
       if (player.finished) { $('card').innerHTML = `<div class="pic-one">${stk('peiron')}</div>`; $('qtop').textContent = ''; $('qbot').textContent = ''; $('qarea').classList.remove('three');
         $('qline').className = ''; $('qline').innerHTML = '<span style="font-family:var(--jp);font-weight:900">ゴール！ おつかれさま！</span>';
         btns.forEach(b => { b.className = 'choice dim ' + (b.dataset.i === '0' ? 'c1' : 'c2'); b.querySelector('.t').textContent = ''; }); }
       else nextQ();
-    }, ok ? 900 : 2000);
+    };
+    // right: on to the next question almost at once (fast readers shouldn't have to wait);
+    // wrong: let the right answer sink in, but a tap skips the wait after a moment
+    clearTimeout(adv.t); adv.cur = advance; adv.t = setTimeout(advance, ok ? 450 : 1800);
+    if (!ok) setTimeout(() => { if (adv.cur === advance && state === 'race') adv.fn = advance; }, 650);
   }
-  document.querySelectorAll('.choice').forEach((b, i) => b.addEventListener('click', () => choose(i)));
+  const adv = { t: 0, fn: null, cur: null };
+  // answer on pointer-DOWN: acting on the release adds a whole tap's delay and loses taps when frames run long
+  function tap(i) { if (locked && adv.fn) { adv.fn(); return; } choose(i); }
+  document.querySelectorAll('.choice').forEach((b, i) => {
+    b.addEventListener('pointerdown', e => { if (e.button > 0) return; e.preventDefault(); tap(i); });
+    b.addEventListener('click', e => { if (e.detail === 0) tap(i); });          // keyboard (Enter/Space) on a focused button
+  });
   addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT') return;
-    if (e.key === '1' || e.key === 'ArrowLeft') choose(0);
-    if (e.key === '2' || e.key === 'ArrowRight') choose(1);
+    if (e.key === '1' || e.key === 'ArrowLeft') tap(0);
+    if (e.key === '2' || e.key === 'ArrowRight') tap(1);
     if (e.key === 'Escape') { $('qr').classList.add('hidden'); $('rules').classList.add('hidden'); }
     if (e.key === 'Enter' && state === 'setup') startRace();
   });

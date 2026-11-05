@@ -111,7 +111,7 @@ button{font-family:inherit;cursor:pointer;border:none}
   text-shadow:0 3px 0 rgba(0,0,0,.25);transition:transform .08s,filter .15s}
 .choice.c1{background:linear-gradient(#ff9f5a,#ff6a2b);box-shadow:0 7px 0 #c2410c}
 .choice.c2{background:linear-gradient(#48b8ff,#1d8ef0);box-shadow:0 7px 0 #0b5fb3}
-.choice:hover:not(:disabled){transform:translateY(-2px);filter:brightness(1.06)}
+.choice:hover:not(:disabled){filter:brightness(1.06)}
 .choice:active:not(:disabled){transform:translateY(4px);box-shadow:0 3px 0 rgba(0,0,0,.3)}
 .choice .key{position:absolute;left:10px;top:8px;width:22px;height:22px;border-radius:7px;background:rgba(255,255,255,.22);font:800 13px/22px var(--round);text-shadow:none;opacity:.8}
 .choice.small .t{font-size:34px}
